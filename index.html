@@ -1,0 +1,1912 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ley de Biot-Savart - Simulador VR</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; overflow:hidden; font-family:'Segoe UI',Arial; background:#06080f; color:#d0dae8; }
+  #panel {
+    position:absolute; top:12px; left:12px; z-index:10;
+    background:linear-gradient(180deg, rgba(18,26,44,0.96), rgba(10,15,26,0.96));
+    padding:14px; border-radius:12px; width:310px;
+    box-shadow:0 8px 32px rgba(0,0,0,0.7);
+    border:1px solid rgba(80,140,255,0.22);
+    max-height: calc(100vh - 24px); overflow-y:auto;
+  }
+  #panel h2 { margin:0 0 2px; color:#4da3ff; font-size:14px; letter-spacing:1.5px; }
+  #panel .sub { font-size:10px; color:#5a7090; letter-spacing:2px; margin-bottom:12px; text-transform:uppercase; }
+  #panel label { display:block; margin-top:10px; font-size:10px; color:#8fa3c0; letter-spacing:1px; text-transform:uppercase; }
+  #panel input[type=range] { width:100%; accent-color:#4da3ff; margin-top:4px; }
+  #panel select, #panel input[type=text] {
+    width:100%; padding:6px; margin-top:4px; background:#0f1628; color:#d0dae8;
+    border:1px solid #2c3d5c; border-radius:6px; font-size:11px;
+  }
+  .valor { color:#4da3ff; font-weight:700; float:right; font-family:'Courier New',monospace; }
+  #panel .check { display:flex; align-items:center; gap:8px; margin-top:6px; font-size:11px; color:#8fa3c0; cursor:pointer; text-transform:none; letter-spacing:0; }
+  #panel .check input { accent-color:#4da3ff; }
+
+  #display { margin-top:12px; padding:8px; background:#03050a; border-radius:8px; border:1px solid rgba(77,163,255,0.3); text-align:center; }
+  #display .lbl { font-size:9px; color:#5a7090; letter-spacing:2px; text-transform:uppercase; }
+  #display .val { font-size:26px; color:#4da3ff; font-weight:700; font-family:'Courier New',monospace; text-shadow:0 0 18px rgba(77,163,255,0.8); line-height:1.1; }
+  #display .unidad { font-size:10px; color:#4da3ff; letter-spacing:1px; }
+
+  .btn {
+    display:block; width:100%; padding:9px; margin-top:8px;
+    background:linear-gradient(180deg,#2563eb,#1d4ed8);
+    color:#fff; border:none; border-radius:6px; cursor:pointer;
+    font-size:12px; font-weight:600; letter-spacing:0.5px;
+    transition: all 0.15s;
+  }
+  .btn:hover { background:linear-gradient(180deg,#3b82f6,#2563eb); transform:translateY(-1px); }
+  .btn:active { transform:translateY(0); }
+  .btn.guardar { background:linear-gradient(180deg,#059669,#047857); }
+  .btn.guardar:hover { background:linear-gradient(180deg,#10b981,#059669); }
+  .btn.reporte { background:linear-gradient(180deg,#9333ea,#7e22ce); }
+  .btn.reporte:hover { background:linear-gradient(180deg,#a855f7,#9333ea); }
+  .btn.limpiar { background:linear-gradient(180deg,#dc2626,#b91c1c); }
+  .btn.limpiar:hover { background:linear-gradient(180deg,#ef4444,#dc2626); }
+  .btn:disabled { opacity:0.4; cursor:not-allowed; transform:none; }
+  .btn.sonido { background:linear-gradient(180deg,#f59e0b,#d97706); }
+  .btn.sonido:hover { background:linear-gradient(180deg,#fbbf24,#f59e0b); }
+  .btn.sonido.activo { background:linear-gradient(180deg,#10b981,#059669); }
+
+  #tablaWrap { margin-top:10px; max-height:180px; overflow-y:auto; border:1px solid #2c3d5c; border-radius:6px; }
+  #tabla { width:100%; border-collapse:collapse; font-size:11px; font-family:'Courier New',monospace; }
+  #tabla th { position:sticky; top:0; background:#1a2238; color:#4da3ff; padding:6px; text-align:center; border-bottom:1px solid #2c3d5c; }
+  #tabla td { padding:4px 6px; text-align:center; border-bottom:1px solid #1a2238; }
+  #tabla tr:nth-child(even) td { background:rgba(30,42,68,0.3); }
+
+  #hud { position:absolute; top:12px; right:12px; z-index:10; background:rgba(18,26,44,0.85); padding:10px 14px; border-radius:8px; font-size:11px; color:#8fa3c0; border:1px solid rgba(80,140,255,0.2); font-family:'Courier New',monospace; line-height:1.6; }
+  #hud b { color:#4da3ff; }
+  #aviso {
+    position:absolute; bottom:12px; left:50%; transform:translateX(-50%);
+    background:rgba(18,26,44,0.9); padding:8px 16px; border-radius:20px;
+    font-size:11px; color:#8fa3c0; border:1px solid rgba(80,140,255,0.2);
+    letter-spacing:1px; max-width:640px; text-align:center;
+  }
+  #aviso b { color:#ffaa44; }
+
+  #toast {
+    position:absolute; bottom:60px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:#059669; color:#fff; padding:10px 22px; border-radius:24px;
+    font-size:12px; font-weight:600; opacity:0; transition:all 0.3s;
+    pointer-events:none; z-index:100;
+  }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  .seccion-titulo {
+    color:#4da3ff; font-size:10px; letter-spacing:2px;
+    text-transform:uppercase; margin-top:14px; margin-bottom:4px;
+    border-bottom:1px solid #2c3d5c; padding-bottom:3px;
+  }
+
+  .leyenda {
+    margin-top:6px; font-size:10px; color:#8fa3c0;
+    display:flex; gap:8px; flex-wrap:wrap;
+  }
+  .leyenda span { display:flex; align-items:center; gap:4px; }
+  .leyenda i {
+    display:inline-block; width:12px; height:8px; border-radius:2px;
+  }
+
+  /* Botón VR posicionado abajo a la derecha */
+  #VRButton-container {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    z-index: 50;
+  }
+  #VRButton-container button {
+    padding: 14px 24px !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 20px rgba(6, 182, 212, 0.5) !important;
+  }
+</style>
+</head>
+<body>
+
+<div id="panel">
+  <h2>⚡ LEY DE BIOT-SAVART</h2>
+  <div class="sub">Simulador 3D · Reporte</div>
+
+  <div class="seccion-titulo">Elemento y alimentación</div>
+
+  <label>Elemento en el origen</label>
+  <select id="elemento">
+    <option value="axial">Varilla perpendicular (axial)</option>
+    <option value="tangencial">Espira circular (tangencial)</option>
+  </select>
+
+  <label>Corriente I <span class="valor" id="valI">15.0 A</span></label>
+  <input type="range" id="corriente" min="0" max="100" value="15" step="0.5">
+
+  <label>Amplificación visual <span class="valor" id="valAmp">50</span>×</label>
+  <input type="range" id="amplificacion" min="1" max="500" value="50" step="1">
+
+  <div class="seccion-titulo">Sonda y medición</div>
+
+  <label>Posición de la sonda <span class="valor" id="valS">100 mm</span></label>
+  <input type="range" id="posicion" min="5" max="300" value="100" step="1">
+
+  <div class="leyenda">
+    <span><i style="background:#10b981"></i>0–50 mm útil</span>
+    <span><i style="background:#f59e0b"></i>50–150 mm débil</span>
+    <span><i style="background:#ef4444"></i>&gt;150 mm ruido</span>
+  </div>
+
+  <div class="seccion-titulo">Visualización</div>
+  <label class="check"><input type="checkbox" id="chkZona" checked> Zona de influencia</label>
+  <label class="check"><input type="checkbox" id="chkVectores" checked> Órbitas de campo</label>
+  <label class="check"><input type="checkbox" id="chkLineas" checked> Líneas de campo</label>
+  <label class="check"><input type="checkbox" id="chkParticulas" checked> Partículas de flujo</label>
+  <label class="check"><input type="checkbox" id="chkLimite"> Anillo de límite medible</label>
+  <label class="check"><input type="checkbox" id="chkRotacion"> Auto-rotación</label>
+
+  <div class="seccion-titulo">Audio</div>
+  <button class="btn sonido" id="btnSonido">🔊 Activar sonido de alto voltaje</button>
+  <label>Volumen <span class="valor" id="valVol">60</span>%</label>
+  <input type="range" id="volumen" min="0" max="100" value="60" step="1">
+
+  <div id="display">
+    <div class="lbl">Inducción magnética</div>
+    <div class="val" id="lectura">0.0000</div>
+    <div class="unidad">mT · Teslámetro</div>
+  </div>
+
+  <div class="seccion-titulo">Captura de datos</div>
+
+  <label>Nombre del estudiante</label>
+  <input type="text" id="nombreEst" placeholder="Ej: Ana García" value="">
+
+  <button class="btn guardar" id="btnGuardar">📌 Guardar medición actual</button>
+  <button class="btn" id="btnBarridoI">🔄 Barrido automático: B vs I</button>
+  <button class="btn" id="btnBarridoS">🔄 Barrido automático: B vs s</button>
+  <button class="btn reporte" id="btnReporte">📄 Generar reporte Word</button>
+  <button class="btn limpiar" id="btnLimpiar">🗑️ Limpiar tabla</button>
+
+  <div id="tablaWrap">
+    <table id="tabla">
+      <thead>
+        <tr><th>#</th><th>Elem.</th><th>I (A)</th><th>s (mm)</th><th>B (mT)</th></tr>
+      </thead>
+      <tbody id="tablaBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="hud">
+  <b>s</b> <span id="hudS">100.0</span> mm<br>
+  <b>I</b> <span id="hudI">15.0</span> A<br>
+  <b>|B|</b> <span id="hudB">0.0000</span> mT
+</div>
+
+<div id="aviso">
+  <b>Nota:</b> el campo es estático en CC · la animación representa su intensidad y zona de influencia
+</div>
+
+<div id="VRButton-container"></div>
+
+<div id="toast"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
+import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+
+// ============================================================
+// CONSTANTES Y UNIDADES
+// ============================================================
+const MU0 = 4 * Math.PI * 1e-7;
+const CM = 0.01;
+
+// La escena se dibuja en METROS. La física trabaja en cm.
+const CARRIL_LARGO_CM = 30;
+const ALTURA_EJE_CM = 6;
+const VARILLA_LARGO_CM = 12;
+const VARILLA_RADIO_CM = 0.3;
+const ESPIRA_RADIO_CM = 2.5;
+
+const ZONA_UTIL_MM = 50;
+const ZONA_DEBIL_MM = 150;
+
+const RADIO_VISUAL_CM = 8;
+const K_DECAIMIENTO = 2.5 / RADIO_VISUAL_CM;
+
+// Factor de escala global: agranda todo para que en VR se vea mejor.
+// 1 = tamaño real (30 cm de carril). 3 = carril de 90 cm.
+const ESCALA_MUNDO = 3.0;
+
+// ============================================================
+// ESCENA
+// ============================================================
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x06080f);
+scene.fog = new THREE.FogExp2(0x06080f, 0.03);
+
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.01, 100);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.xr.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+// ============================================================
+// MUNDO: toda la escena cuelga de este grupo, escalado y colocado
+// frente al usuario
+// ============================================================
+const mundo = new THREE.Group();
+mundo.scale.setScalar(ESCALA_MUNDO);
+mundo.position.set(-CARRIL_LARGO_CM / 2 / 100 * ESCALA_MUNDO, 0, -0.7);
+scene.add(mundo);
+
+// Controles de escritorio
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.1, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.autoRotateSpeed = 0.4;
+controls.maxPolarAngle = Math.PI * 0.49;
+
+// Cámara escritorio
+camera.position.set(0.15, 0.35, 0.55);
+
+// ============================================================
+// LUCES
+// ============================================================
+scene.add(new THREE.AmbientLight(0x8899bb, 0.55));
+
+const keyLight = new THREE.DirectionalLight(0xfff0e0, 1.0);
+keyLight.position.set(1.5, 3, 1.5);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(2048, 2048);
+keyLight.shadow.camera.left = -2;
+keyLight.shadow.camera.right = 2;
+keyLight.shadow.camera.top = 2;
+keyLight.shadow.camera.bottom = -2;
+keyLight.shadow.camera.near = 0.1;
+keyLight.shadow.camera.far = 8;
+scene.add(keyLight);
+
+const p1 = new THREE.PointLight(0x4da3ff, 0.6, 4);
+p1.position.set(-1, 1.5, -1);
+scene.add(p1);
+const p2 = new THREE.PointLight(0xff6b4a, 0.35, 3.5);
+p2.position.set(1, 0.8, -1.5);
+scene.add(p2);
+
+// ============================================================
+// SUELO
+// ============================================================
+const grid = new THREE.GridHelper(8, 80, 0x18202e, 0x10161f);
+grid.position.y = 0.001;
+scene.add(grid);
+
+// ============================================================
+// CARRIL ÓPTICO (dentro de `mundo`, en cm → m)
+// ============================================================
+const carrilGroup = new THREE.Group();
+
+const carrilBase = new THREE.Mesh(
+  new THREE.BoxGeometry((CARRIL_LARGO_CM + 4) / 100, 0.006, 0.025),
+  new THREE.MeshStandardMaterial({ color: 0x3a4a5c, metalness: 0.85, roughness: 0.35 })
+);
+carrilBase.position.set(CARRIL_LARGO_CM/2 / 100, 0.003, 0);
+carrilBase.receiveShadow = true;
+carrilBase.castShadow = true;
+carrilGroup.add(carrilBase);
+
+const ranura = new THREE.Mesh(
+  new THREE.BoxGeometry((CARRIL_LARGO_CM + 4) / 100, 0.002, 0.004),
+  new THREE.MeshStandardMaterial({ color: 0x0a0e18, roughness: 0.9 })
+);
+ranura.position.set(CARRIL_LARGO_CM/2 / 100, 0.0065, 0);
+carrilGroup.add(ranura);
+
+function crearTiraZona(x0_cm, x1_cm, color, opacidad) {
+  const ancho = (x1_cm - x0_cm) / 100;
+  const geo = new THREE.PlaneGeometry(ancho, 0.008);
+  const mat = new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity: opacidad,
+    side: THREE.DoubleSide, depthWrite: false
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.set((x0_cm + (x1_cm - x0_cm)/2) / 100, 0.0067, 0);
+  return mesh;
+}
+
+carrilGroup.add(crearTiraZona(0, ZONA_UTIL_MM/10, 0x10b981, 0.35));
+carrilGroup.add(crearTiraZona(ZONA_UTIL_MM/10, ZONA_DEBIL_MM/10, 0xf59e0b, 0.3));
+carrilGroup.add(crearTiraZona(ZONA_DEBIL_MM/10, CARRIL_LARGO_CM, 0xef4444, 0.25));
+
+const matMarca = new THREE.MeshStandardMaterial({ color: 0xd0dae8, emissive: 0x4da3ff, emissiveIntensity: 0.15 });
+const matMarcaGrande = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x4da3ff, emissiveIntensity: 0.5 });
+for (let cm = 0; cm <= CARRIL_LARGO_CM; cm++) {
+  const esGrande = cm % 5 === 0;
+  const marca = new THREE.Mesh(
+    new THREE.BoxGeometry(0.0006, 0.006, esGrande ? 0.01 : 0.005),
+    esGrande ? matMarcaGrande : matMarca
+  );
+  marca.position.set(cm / 100, 0.0065, 0.01);
+  carrilGroup.add(marca);
+}
+mundo.add(carrilGroup);
+
+function crearTexto(texto, x_cm, y_cm, z_cm, size_cm, color) {
+  size_cm = size_cm || 1.0;
+  color = color || '#4da3ff';
+  const canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = color;
+  ctx.font = 'bold 40px Courier New';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(texto, 128, 32);
+  const tex = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sprite.position.set(x_cm / 100, y_cm / 100, z_cm / 100);
+  sprite.scale.set(size_cm * 2 / 100, size_cm * 0.5 / 100, 1);
+  return sprite;
+}
+
+for (let cm = 0; cm <= CARRIL_LARGO_CM; cm += 5) {
+  mundo.add(crearTexto(cm + 'cm', cm, 1.4, 1.8, 1.0));
+}
+mundo.add(crearTexto('origen', 0, ALTURA_EJE_CM + 3.5, 0, 1.2, '#ff8844'));
+
+// ============================================================
+// FUENTE
+// ============================================================
+function crearFuente() {
+  const g = new THREE.Group();
+  const cuerpo = new THREE.Mesh(
+    new THREE.BoxGeometry(0.05, 0.045, 0.04),
+    new THREE.MeshStandardMaterial({ color: 0x2a3548, metalness: 0.6, roughness: 0.4 })
+  );
+  cuerpo.position.y = 0.0225;
+  cuerpo.castShadow = true;
+  g.add(cuerpo);
+
+  const panel = new THREE.Mesh(
+    new THREE.BoxGeometry(0.046, 0.04, 0.001),
+    new THREE.MeshStandardMaterial({ color: 0x0a0e18, metalness: 0.5, roughness: 0.6 })
+  );
+  panel.position.set(0, 0.0225, 0.0205);
+  g.add(panel);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 512; canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  const tex = new THREE.CanvasTexture(canvas);
+  const display = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.04, 0.012),
+    new THREE.MeshBasicMaterial({ map: tex })
+  );
+  display.position.set(0, 0.03, 0.0211);
+  g.add(display);
+
+  g.userData = { ctx, canvas, tex };
+  return g;
+}
+
+const fuente = crearFuente();
+fuente.position.set(-0.12, 0, -0.08);
+fuente.rotation.y = 0.35;
+mundo.add(fuente);
+
+// ============================================================
+// TESLÁMETRO
+// ============================================================
+function crearTeslametro() {
+  const g = new THREE.Group();
+  const cuerpo = new THREE.Mesh(
+    new THREE.BoxGeometry(0.05, 0.035, 0.04),
+    new THREE.MeshStandardMaterial({ color: 0x2a3548, metalness: 0.6, roughness: 0.4 })
+  );
+  cuerpo.position.y = 0.0175;
+  cuerpo.castShadow = true;
+  g.add(cuerpo);
+
+  const panel = new THREE.Mesh(
+    new THREE.BoxGeometry(0.046, 0.031, 0.001),
+    new THREE.MeshStandardMaterial({ color: 0x0a0e18 })
+  );
+  panel.position.set(0, 0.0175, 0.0205);
+  g.add(panel);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 512; canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  const tex = new THREE.CanvasTexture(canvas);
+  const display = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.04, 0.012),
+    new THREE.MeshBasicMaterial({ map: tex })
+  );
+  display.position.set(0, 0.023, 0.0211);
+  g.add(display);
+
+  g.userData = { ctx, canvas, tex };
+  return g;
+}
+
+const teslametro = crearTeslametro();
+teslametro.position.set(0.38, 0, -0.08);
+teslametro.rotation.y = -0.35;
+mundo.add(teslametro);
+
+// ============================================================
+// VARILLA PERPENDICULAR (eje Z)
+// ============================================================
+const varillaGroup = new THREE.Group();
+
+const varilla = new THREE.Mesh(
+  new THREE.CylinderGeometry(VARILLA_RADIO_CM/100, VARILLA_RADIO_CM/100, VARILLA_LARGO_CM/100, 16),
+  new THREE.MeshStandardMaterial({
+    color: 0xc47a3a, metalness: 0.95, roughness: 0.15,
+    emissive: 0x4a2a10, emissiveIntensity: 0.3
+  })
+);
+varilla.rotation.x = Math.PI / 2;
+varilla.position.set(0, ALTURA_EJE_CM/100, 0);
+varilla.castShadow = true;
+varillaGroup.add(varilla);
+
+const haloVarilla = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.005, 0.005, VARILLA_LARGO_CM/100, 16, 1, true),
+  new THREE.MeshBasicMaterial({
+    color: 0xff8844, transparent: true, opacity: 0.0,
+    side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false
+  })
+);
+haloVarilla.rotation.x = Math.PI / 2;
+haloVarilla.position.set(0, ALTURA_EJE_CM/100, 0);
+varillaGroup.add(haloVarilla);
+
+for (const z of [-VARILLA_LARGO_CM/2/100 - 0.005, VARILLA_LARGO_CM/2/100 + 0.005]) {
+  const soporte = new THREE.Mesh(
+    new THREE.BoxGeometry(0.012, 0.012, 0.01),
+    new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.9 })
+  );
+  soporte.position.set(0, ALTURA_EJE_CM/100, z);
+  varillaGroup.add(soporte);
+
+  const poste = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.0015, 0.0015, ALTURA_EJE_CM/100 - 0.006, 8),
+    new THREE.MeshStandardMaterial({ color: 0x4a4a4a, metalness: 0.7, roughness: 0.4 })
+  );
+  poste.position.set(0, (ALTURA_EJE_CM/100 - 0.006)/2 + 0.001, z);
+  varillaGroup.add(poste);
+}
+
+mundo.add(varillaGroup);
+
+// ============================================================
+// ESPIRA (plano YZ, eje en X)
+// ============================================================
+const espiraGroup = new THREE.Group();
+
+const espira = new THREE.Mesh(
+  new THREE.TorusGeometry(ESPIRA_RADIO_CM/100, 0.0025, 16, 64),
+  new THREE.MeshStandardMaterial({
+    color: 0xc47a3a, metalness: 0.95, roughness: 0.15,
+    emissive: 0x4a2a10, emissiveIntensity: 0.3
+  })
+);
+espira.rotation.y = Math.PI / 2;
+espira.position.set(0, ALTURA_EJE_CM/100, 0);
+espira.castShadow = true;
+espiraGroup.add(espira);
+
+const haloEspira = new THREE.Mesh(
+  new THREE.TorusGeometry(ESPIRA_RADIO_CM/100, 0.0045, 16, 64),
+  new THREE.MeshBasicMaterial({
+    color: 0xff8844, transparent: true, opacity: 0.0,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  })
+);
+haloEspira.rotation.y = Math.PI / 2;
+haloEspira.position.set(0, ALTURA_EJE_CM/100, 0);
+espiraGroup.add(haloEspira);
+
+const posteEspira = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.0015, 0.0015, ALTURA_EJE_CM/100 - ESPIRA_RADIO_CM/100 - 0.003, 8),
+  new THREE.MeshStandardMaterial({ color: 0x4a4a4a, metalness: 0.7, roughness: 0.4 })
+);
+posteEspira.position.set(0, (ALTURA_EJE_CM/100 - ESPIRA_RADIO_CM/100 - 0.003)/2 + 0.001, 0);
+espiraGroup.add(posteEspira);
+
+espiraGroup.visible = false;
+mundo.add(espiraGroup);
+
+// ============================================================
+// SONDA HALL
+// ============================================================
+const sondaGroup = new THREE.Group();
+
+const baseSonda = new THREE.Mesh(
+  new THREE.BoxGeometry(0.02, 0.007, 0.02),
+  new THREE.MeshStandardMaterial({ color: 0x4a5a6c, metalness: 0.7, roughness: 0.3 })
+);
+baseSonda.position.y = 0.0095;
+baseSonda.castShadow = true;
+sondaGroup.add(baseSonda);
+
+const posteSonda = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.0014, 0.0014, ALTURA_EJE_CM/100 - 0.011, 8),
+  new THREE.MeshStandardMaterial({ color: 0x6a7a8c, metalness: 0.8, roughness: 0.3 })
+);
+posteSonda.position.y = (ALTURA_EJE_CM/100 - 0.011)/2 + 0.011;
+posteSonda.castShadow = true;
+sondaGroup.add(posteSonda);
+
+const brazoSonda = new THREE.Mesh(
+  new THREE.BoxGeometry(0.016, 0.0025, 0.0025),
+  new THREE.MeshStandardMaterial({ color: 0x6a7a8c, metalness: 0.8, roughness: 0.3 })
+);
+brazoSonda.position.set(-0.008, ALTURA_EJE_CM/100, 0);
+brazoSonda.castShadow = true;
+sondaGroup.add(brazoSonda);
+
+const puntaSonda = new THREE.Mesh(
+  new THREE.SphereGeometry(0.0022, 12, 12),
+  new THREE.MeshStandardMaterial({
+    color: 0xff4a4a, emissive: 0xff4a4a, emissiveIntensity: 0.8,
+    metalness: 0.5, roughness: 0.3
+  })
+);
+puntaSonda.position.set(-0.016, ALTURA_EJE_CM/100, 0);
+sondaGroup.add(puntaSonda);
+
+mundo.add(sondaGroup);
+
+// ============================================================
+// FÍSICA
+// ============================================================
+function segmentosVarilla() {
+  const N = 100;
+  const segs = [];
+  const dl = VARILLA_LARGO_CM / N;
+  for (let i = 0; i < N; i++) {
+    const z = -VARILLA_LARGO_CM/2 + (i + 0.5) * dl;
+    segs.push({
+      centro: new THREE.Vector3(0, ALTURA_EJE_CM, z),
+      dl: new THREE.Vector3(0, 0, dl * CM)
+    });
+  }
+  return segs;
+}
+
+function segmentosEspira() {
+  const N = 100;
+  const segs = [];
+  for (let i = 0; i < N; i++) {
+    const t0 = (i / N) * 2 * Math.PI;
+    const t1 = ((i + 1) / N) * 2 * Math.PI;
+    const p0 = new THREE.Vector3(0, ALTURA_EJE_CM + ESPIRA_RADIO_CM * Math.cos(t0), ESPIRA_RADIO_CM * Math.sin(t0));
+    const p1 = new THREE.Vector3(0, ALTURA_EJE_CM + ESPIRA_RADIO_CM * Math.cos(t1), ESPIRA_RADIO_CM * Math.sin(t1));
+    const centro = new THREE.Vector3().addVectors(p0, p1).multiplyScalar(0.5);
+    const dl = new THREE.Vector3().subVectors(p1, p0).multiplyScalar(CM);
+    segs.push({ centro, dl });
+  }
+  return segs;
+}
+
+function calcularB(puntoCM, segmentos, I) {
+  const B = new THREE.Vector3();
+  const pM = puntoCM.clone().multiplyScalar(CM);
+  for (let i = 0; i < segmentos.length; i++) {
+    const s = segmentos[i];
+    const centroM = s.centro.clone().multiplyScalar(CM);
+    const R = new THREE.Vector3().subVectors(pM, centroM);
+    const r2 = R.lengthSq();
+    if (r2 < 1e-8) continue;
+    const r = Math.sqrt(r2);
+    const dB = new THREE.Vector3()
+      .crossVectors(s.dl, R)
+      .multiplyScalar((MU0 * I) / (4 * Math.PI * r * r * r));
+    B.add(dB);
+  }
+  return B;
+}
+
+function distanciaRadial(p) {
+  if (estado.elemento === 'axial') {
+    return Math.sqrt(p.x * p.x + (p.y - ALTURA_EJE_CM) * (p.y - ALTURA_EJE_CM));
+  } else {
+    const dy = p.y - ALTURA_EJE_CM;
+    return Math.sqrt(p.x * p.x + dy * dy + p.z * p.z);
+  }
+}
+
+// ============================================================
+// ESTADO
+// ============================================================
+const estado = {
+  elemento: 'axial',
+  I: 15,
+  s_mm: 100,
+  amplificacion: 50,
+  segmentos: segmentosVarilla(),
+  mostrarZona: true,
+  mostrarVectores: true,
+  mostrarLineas: true,
+  mostrarParticulas: true,
+  mostrarLimite: false
+};
+
+function smmToCm(mm) { return mm / 10; }
+
+const datosCapturados = [];
+
+// ============================================================
+// GRUPOS
+// ============================================================
+const zonaGroup = new THREE.Group();
+const vectoresGroup = new THREE.Group();
+const lineasGroup = new THREE.Group();
+const particulasGroup = new THREE.Group();
+const limiteGroup = new THREE.Group();
+mundo.add(zonaGroup, vectoresGroup, lineasGroup, particulasGroup, limiteGroup);
+
+let zonaShells = [];
+let orbitalesPuntos = null;
+let orbitalesData = [];
+
+// ============================================================
+// ZONA DE INFLUENCIA
+// ============================================================
+function crearZonaInfluencia() {
+  while (zonaGroup.children.length) {
+    const c = zonaGroup.children[0];
+    zonaGroup.remove(c);
+    if (c.geometry) c.geometry.dispose();
+  }
+  zonaShells = [];
+
+  const numCapas = 6;
+  const radioMax = RADIO_VISUAL_CM * 1.2;
+
+  if (estado.elemento === 'axial') {
+    for (let i = 0; i < numCapas; i++) {
+      const frac = (i + 1) / numCapas;
+      const radio = (0.5 + frac * radioMax) / 100;
+      const opacidad = (1 - frac) * 0.10;
+      if (opacidad < 0.005) continue;
+
+      const geo = new THREE.CylinderGeometry(radio, radio, VARILLA_LARGO_CM * 1.1 / 100, 32, 1, true);
+      const mat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color().setHSL(0.55 - frac*0.15, 1.0, 0.5),
+        transparent: true,
+        opacity: opacidad,
+        side: THREE.BackSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const shell = new THREE.Mesh(geo, mat);
+      shell.rotation.x = Math.PI / 2;
+      shell.position.set(0, ALTURA_EJE_CM/100, 0);
+      zonaGroup.add(shell);
+      zonaShells.push({ mesh: shell, fase: i / numCapas });
+    }
+  } else {
+    for (let i = 0; i < numCapas; i++) {
+      const frac = (i + 1) / numCapas;
+      const radio = (0.5 + frac * radioMax) / 100;
+      const opacidad = (1 - frac) * 0.10;
+      if (opacidad < 0.005) continue;
+
+      const geo = new THREE.SphereGeometry(radio, 24, 18);
+      const mat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color().setHSL(0.55 - frac*0.15, 1.0, 0.5),
+        transparent: true,
+        opacity: opacidad,
+        side: THREE.BackSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const shell = new THREE.Mesh(geo, mat);
+      shell.position.set(0, ALTURA_EJE_CM/100, 0);
+      zonaGroup.add(shell);
+      zonaShells.push({ mesh: shell, fase: i / numCapas });
+    }
+  }
+}
+
+// ============================================================
+// ANILLO DE LÍMITE
+// ============================================================
+function crearAnilloLimite() {
+  while (limiteGroup.children.length) {
+    const c = limiteGroup.children[0];
+    limiteGroup.remove(c);
+    if (c.geometry) c.geometry.dispose();
+  }
+  if (!estado.mostrarLimite) return;
+
+  const umbral = 0.01e-3;
+  let dLimiteCM = 1;
+  for (let d = 0.5; d < 40; d += 0.5) {
+    const p = new THREE.Vector3(d, ALTURA_EJE_CM, 0);
+    const B = calcularB(p, estado.segmentos, estado.I);
+    if (B.length() < umbral) { dLimiteCM = d; break; }
+  }
+
+  const linea = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(dLimiteCM/100, 0, 0),
+      new THREE.Vector3(dLimiteCM/100, ALTURA_EJE_CM/100 + 0.02, 0)
+    ]),
+    new THREE.LineDashedMaterial({ color: 0xffaa44, dashSize: 0.004, gapSize: 0.003 })
+  );
+  linea.computeLineDistances();
+  limiteGroup.add(linea);
+
+  const sprite = crearTexto((dLimiteCM * 10).toFixed(0) + ' mm', dLimiteCM + 1.5, ALTURA_EJE_CM + 2.5, 0, 1.0, '#ffaa44');
+  limiteGroup.add(sprite);
+}
+
+// ============================================================
+// ÓRBITAS DE CAMPO
+// ============================================================
+function tangenteAlambreEspira(theta) {
+  return new THREE.Vector3(
+    0,
+    -ESPIRA_RADIO_CM * Math.sin(theta),
+    ESPIRA_RADIO_CM * Math.cos(theta)
+  ).normalize();
+}
+
+function basePerpendicular(tangente) {
+  const up = Math.abs(tangente.y) < 0.9
+    ? new THREE.Vector3(0, 1, 0)
+    : new THREE.Vector3(1, 0, 0);
+  const u = new THREE.Vector3().crossVectors(tangente, up).normalize();
+  const v = new THREE.Vector3().crossVectors(tangente, u).normalize();
+  return { u, v };
+}
+
+function crearOrbitas() {
+  while (vectoresGroup.children.length) {
+    const c = vectoresGroup.children[0];
+    vectoresGroup.remove(c);
+    if (c.geometry) c.geometry.dispose();
+    if (c.material) c.material.dispose();
+  }
+  orbitalesData = [];
+  orbitalesPuntos = null;
+  if (!estado.mostrarVectores) return;
+
+  const radiosCM = [];
+  for (let r = 0.4; r <= 3; r += 0.3) radiosCM.push(r);
+  for (let r = 3.3; r <= 6; r += 0.5) radiosCM.push(r);
+  for (let r = 6.5; r <= RADIO_VISUAL_CM * 1.2; r += 0.8) radiosCM.push(r);
+
+  const PARTICULAS_POR_ORBITA = 20;
+
+  if (estado.elemento === 'axial') {
+    const alturasZ = [-4, -2, 0, 2, 4];
+    radiosCM.forEach(radio => {
+      const alpha = Math.exp(-radio * K_DECAIMIENTO);
+      if (alpha < 0.04) return;
+
+      alturasZ.forEach(z => {
+        const pRef = new THREE.Vector3(radio, ALTURA_EJE_CM, 0);
+        const B = calcularB(pRef, estado.segmentos, estado.I);
+        const mag = B.length();
+        const velAngular = Math.min(mag * 8e5, 4.0);
+
+        for (let i = 0; i < PARTICULAS_POR_ORBITA; i++) {
+          orbitalesData.push({
+            tipo: 'z',
+            centro: new THREE.Vector3(0, ALTURA_EJE_CM, z).multiplyScalar(CM),
+            u: new THREE.Vector3(1, 0, 0),
+            v: new THREE.Vector3(0, 1, 0),
+            radio: radio * CM,
+            angulo: (i / PARTICULAS_POR_ORBITA) * Math.PI * 2,
+            velAngular: velAngular,
+            direccion: 1,
+            alpha: alpha * 0.9,
+            fase: Math.random() * Math.PI * 2
+          });
+        }
+      });
+    });
+  } else {
+    const N_ALAMBRE = 24;
+    for (let k = 0; k < N_ALAMBRE; k++) {
+      const theta = (k / N_ALAMBRE) * Math.PI * 2;
+      const centroOrbita = new THREE.Vector3(
+        0,
+        ALTURA_EJE_CM + ESPIRA_RADIO_CM * Math.cos(theta),
+        ESPIRA_RADIO_CM * Math.sin(theta)
+      ).multiplyScalar(CM);
+      const tangente = tangenteAlambreEspira(theta);
+      const { u, v } = basePerpendicular(tangente);
+
+      radiosCM.forEach(radio => {
+        const alpha = Math.exp(-radio * K_DECAIMIENTO);
+        if (alpha < 0.04) return;
+
+        const pRef = new THREE.Vector3(
+          centroOrbita.x / CM + u.x * radio,
+          centroOrbita.y / CM + u.y * radio,
+          centroOrbita.z / CM + u.z * radio
+        );
+        const B = calcularB(pRef, estado.segmentos, estado.I);
+        const mag = B.length();
+        const velAngular = Math.min(mag * 8e5, 4.0);
+
+        for (let i = 0; i < PARTICULAS_POR_ORBITA; i++) {
+          orbitalesData.push({
+            tipo: 'espira',
+            centro: centroOrbita,
+            u: u,
+            v: v,
+            radio: radio * CM,
+            angulo: (i / PARTICULAS_POR_ORBITA) * Math.PI * 2,
+            velAngular: velAngular,
+            direccion: 1,
+            alpha: alpha * 0.9,
+            fase: Math.random() * Math.PI * 2
+          });
+        }
+      });
+    }
+  }
+
+  if (orbitalesData.length === 0) return;
+
+  const N = orbitalesData.length;
+  const posiciones = new Float32Array(N * 3);
+  const colores = new Float32Array(N * 3);
+  const alphas = new Float32Array(N);
+
+  for (let i = 0; i < N; i++) {
+    const o = orbitalesData[i];
+    const cosA = Math.cos(o.angulo);
+    const sinA = Math.sin(o.angulo);
+    posiciones[i*3]     = o.centro.x + o.radio * (cosA * o.u.x + sinA * o.v.x);
+    posiciones[i*3 + 1] = o.centro.y + o.radio * (cosA * o.u.y + sinA * o.v.y);
+    posiciones[i*3 + 2] = o.centro.z + o.radio * (cosA * o.u.z + sinA * o.v.z);
+
+    const t = 1 - o.alpha;
+    colores[i*3]     = 0.15 + 0.55 * t;
+    colores[i*3 + 1] = 0.85 - 0.55 * t;
+    colores[i*3 + 2] = 1.0;
+    alphas[i] = o.alpha;
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(posiciones, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(colores, 3));
+  geo.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uSize: { value: 0.55 / 100 },
+      uPixelRatio: { value: renderer.getPixelRatio() }
+    },
+    vertexShader: `
+      attribute vec3 color;
+      attribute float alpha;
+      varying vec3 vColor;
+      varying float vAlpha;
+      uniform float uSize;
+      uniform float uPixelRatio;
+      void main() {
+        vColor = color;
+        vAlpha = alpha;
+        vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = uSize * uPixelRatio * (300.0 / -mvPos.z);
+        gl_Position = projectionMatrix * mvPos;
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vColor;
+      varying float vAlpha;
+      void main() {
+        if (vAlpha < 0.02) discard;
+        vec2 c = gl_PointCoord - vec2(0.5);
+        float d = length(c);
+        if (d > 0.5) discard;
+        float glow = 1.0 - smoothstep(0.0, 0.5, d);
+        gl_FragColor = vec4(vColor, vAlpha * glow);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+
+  orbitalesPuntos = new THREE.Points(geo, mat);
+  vectoresGroup.add(orbitalesPuntos);
+}
+
+function animarOrbitas(dt) {
+  if (!orbitalesPuntos || !estado.mostrarVectores) return;
+  const arr = orbitalesPuntos.geometry.attributes.position.array;
+  const arrAlpha = orbitalesPuntos.geometry.attributes.alpha.array;
+
+  orbitalesData.forEach((o, i) => {
+    o.angulo += o.velAngular * dt * o.direccion * (1 + estado.I / 100);
+
+    const cosA = Math.cos(o.angulo);
+    const sinA = Math.sin(o.angulo);
+    arr[i*3]     = o.centro.x + o.radio * (cosA * o.u.x + sinA * o.v.x);
+    arr[i*3 + 1] = o.centro.y + o.radio * (cosA * o.u.y + sinA * o.v.y);
+    arr[i*3 + 2] = o.centro.z + o.radio * (cosA * o.u.z + sinA * o.v.z);
+
+    const pulso = 0.8 + 0.2 * Math.sin(timeAcc * 3 + o.fase);
+    arrAlpha[i] = o.alpha * pulso;
+  });
+
+  orbitalesPuntos.geometry.attributes.position.needsUpdate = true;
+  orbitalesPuntos.geometry.attributes.alpha.needsUpdate = true;
+}
+
+// ============================================================
+// LÍNEAS DE CAMPO
+// ============================================================
+function trazarLinea(semilla, signo) {
+  const puntos = [];
+  let p = semilla.clone();
+  const h = 0.25;
+
+  for (let i = 0; i < 400; i++) {
+    const B = calcularB(p, estado.segmentos, estado.I);
+    if (B.length() < 1e-16) break;
+    puntos.push(p.clone());
+
+    const dir = B.clone().normalize().multiplyScalar(signo);
+    const pMid = p.clone().addScaledVector(dir, h * 0.5);
+    const BMid = calcularB(pMid, estado.segmentos, estado.I);
+    if (BMid.length() < 1e-16) break;
+    const dir2 = BMid.clone().normalize().multiplyScalar(signo);
+    p.addScaledVector(dir2, h);
+
+    if (p.length() > 40) break;
+
+    if (estado.elemento === 'axial') {
+      if (Math.abs(p.x) < 0.35 && Math.abs(p.y - ALTURA_EJE_CM) < 0.35) break;
+    } else {
+      const dy = p.y - ALTURA_EJE_CM;
+      if (Math.sqrt(p.x*p.x + dy*dy + p.z*p.z) < ESPIRA_RADIO_CM * 0.9) break;
+    }
+
+    if (distanciaRadial(p) > RADIO_VISUAL_CM * 2.5) break;
+  }
+  return puntos;
+}
+
+function crearGeometriaLinea(puntos) {
+  const N = puntos.length;
+  if (N < 2) return null;
+
+  const posiciones = new Float32Array(N * 3);
+  const colores = new Float32Array(N * 3);
+  const alphas = new Float32Array(N);
+
+  for (let i = 0; i < N; i++) {
+    const p = puntos[i];
+    posiciones[i*3]     = p.x * CM;
+    posiciones[i*3 + 1] = p.y * CM;
+    posiciones[i*3 + 2] = p.z * CM;
+
+    const distRadial = distanciaRadial(p);
+    const factorRadial = Math.exp(-distRadial * K_DECAIMIENTO);
+
+    const B = calcularB(p, estado.segmentos, estado.I);
+    const mag = B.length();
+    const factorMag = Math.min(1, Math.pow(mag * estado.amplificacion * 1e5, 0.15));
+
+    const alpha = factorRadial * (0.5 + 0.5 * factorMag);
+
+    const t = Math.min(1, distRadial / RADIO_VISUAL_CM);
+    colores[i*3]     = 0.15 + 0.55 * t;
+    colores[i*3 + 1] = 0.85 - 0.55 * t;
+    colores[i*3 + 2] = 1.0;
+    alphas[i] = alpha;
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(posiciones, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(colores, 3));
+  geo.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
+  return geo;
+}
+
+function crearMaterialLinea() {
+  return new THREE.ShaderMaterial({
+    vertexShader: `
+      attribute vec3 color; attribute float alpha;
+      varying vec3 vColor; varying float vAlpha;
+      void main() {
+        vColor = color; vAlpha = alpha;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `
+      varying vec3 vColor; varying float vAlpha;
+      void main() {
+        if (vAlpha < 0.01) discard;
+        gl_FragColor = vec4(vColor, vAlpha);
+      }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+  });
+}
+
+function crearLineas() {
+  while (lineasGroup.children.length) {
+    const c = lineasGroup.children[0];
+    lineasGroup.remove(c);
+    if (c.geometry) c.geometry.dispose();
+  }
+  if (!estado.mostrarLineas) return;
+
+  const semillas = [];
+  if (estado.elemento === 'axial') {
+    const N = 12;
+    for (let i = 0; i < N; i++) {
+      const ang = (i / N) * 2 * Math.PI;
+      for (const z of [-4, -2, 0, 2, 4]) {
+        semillas.push(new THREE.Vector3(
+          0.5 * Math.cos(ang),
+          ALTURA_EJE_CM + 0.5 * Math.sin(ang),
+          z
+        ));
+      }
+    }
+  } else {
+    const N = 16;
+    for (let i = 0; i < N; i++) {
+      const ang = (i / N) * 2 * Math.PI;
+      semillas.push(new THREE.Vector3(
+        0.4,
+        ALTURA_EJE_CM + ESPIRA_RADIO_CM * 0.9 * Math.cos(ang),
+        ESPIRA_RADIO_CM * 0.9 * Math.sin(ang)
+      ));
+    }
+  }
+
+  semillas.forEach(semilla => {
+    for (const signo of [1, -1]) {
+      const pts = trazarLinea(semilla, signo);
+      if (pts.length > 3) {
+        const geo = crearGeometriaLinea(pts);
+        if (geo) lineasGroup.add(new THREE.Line(geo, crearMaterialLinea()));
+      }
+    }
+  });
+}
+
+// ============================================================
+// PARTÍCULAS DE FLUJO
+// ============================================================
+let particulasPuntos = null;
+let particulasInfo = [];
+
+function regenerarParticulas() {
+  while (particulasGroup.children.length) {
+    const c = particulasGroup.children[0];
+    particulasGroup.remove(c);
+    if (c.geometry) c.geometry.dispose();
+    if (c.material) c.material.dispose();
+  }
+  particulasInfo = [];
+  particulasPuntos = null;
+  if (!estado.mostrarParticulas) return;
+
+  const lineas = [];
+  lineasGroup.children.forEach(linea => {
+    const pos = linea.geometry.attributes.position.array;
+    const pts = [];
+    for (let i = 0; i < pos.length; i += 3) {
+      pts.push(new THREE.Vector3(pos[i], pos[i+1], pos[i+2]));
+    }
+    if (pts.length > 5) lineas.push(pts);
+  });
+  if (lineas.length === 0) return;
+
+  const NPORLINEA = 4;
+  const total = lineas.length * NPORLINEA;
+
+  const posiciones = new Float32Array(total * 3);
+  const colores = new Float32Array(total * 3);
+  const alphas = new Float32Array(total);
+
+  let k = 0;
+  lineas.forEach(pts => {
+    for (let j = 0; j < NPORLINEA; j++) {
+      const t = Math.random();
+      const idx = Math.floor(t * (pts.length - 1));
+      const p = pts[idx];
+      posiciones[k*3]     = p.x;
+      posiciones[k*3 + 1] = p.y;
+      posiciones[k*3 + 2] = p.z;
+
+      colores[k*3]     = 0.55;
+      colores[k*3 + 1] = 1.0;
+      colores[k*3 + 2] = 1.0;
+      alphas[k] = 0;
+
+      particulasInfo.push({
+        linea: pts,
+        t: t,
+        vel: 0.003 + Math.random() * 0.006,
+        fase: Math.random() * Math.PI * 2
+      });
+      k++;
+    }
+  });
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(posiciones, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(colores, 3));
+  geo.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uSize: { value: 0.45 / 100 },
+      uPixelRatio: { value: renderer.getPixelRatio() }
+    },
+    vertexShader: `
+      attribute vec3 color;
+      attribute float alpha;
+      varying vec3 vColor;
+      varying float vAlpha;
+      uniform float uSize;
+      uniform float uPixelRatio;
+      void main() {
+        vColor = color;
+        vAlpha = alpha;
+        vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = uSize * uPixelRatio * (300.0 / -mvPos.z);
+        gl_Position = projectionMatrix * mvPos;
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vColor;
+      varying float vAlpha;
+      void main() {
+        if (vAlpha < 0.02) discard;
+        vec2 c = gl_PointCoord - vec2(0.5);
+        float d = length(c);
+        if (d > 0.5) discard;
+        float glow = 1.0 - smoothstep(0.0, 0.5, d);
+        gl_FragColor = vec4(vColor, vAlpha * glow);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+
+  particulasPuntos = new THREE.Points(geo, mat);
+  particulasGroup.add(particulasPuntos);
+}
+
+function animarParticulas(dt) {
+  if (!particulasPuntos || !estado.mostrarParticulas) return;
+  const arr = particulasPuntos.geometry.attributes.position.array;
+  const arrAlpha = particulasPuntos.geometry.attributes.alpha.array;
+
+  particulasInfo.forEach((info, i) => {
+    const pts = info.linea;
+    const idx0 = Math.min(Math.floor(info.t * (pts.length - 1)), pts.length - 2);
+    const pAct = pts[idx0];
+
+    const pActCM = pAct.clone().divideScalar(CM);
+    const distRadial = distanciaRadial(pActCM);
+    const visibilidad = Math.exp(-distRadial * K_DECAIMIENTO);
+    const velFactor = 1.0 / (1.0 + distRadial * 0.4);
+    info.t += info.vel * velFactor * (1 + estado.I / 40) * dt * 60;
+
+    if (info.t > 1) info.t = 0;
+
+    const idx = Math.min(Math.floor(info.t * (pts.length - 1)), pts.length - 2);
+    const frac = info.t * (pts.length - 1) - idx;
+    const p0 = pts[idx];
+    const p1 = pts[idx + 1];
+
+    arr[i*3]     = p0.x + (p1.x - p0.x) * frac;
+    arr[i*3 + 1] = p0.y + (p1.y - p0.y) * frac;
+    arr[i*3 + 2] = p0.z + (p1.z - p0.z) * frac;
+
+    const pulso = 0.75 + 0.25 * Math.sin(timeAcc * 3 + info.fase);
+    arrAlpha[i] = visibilidad * pulso;
+  });
+
+  particulasPuntos.geometry.attributes.position.needsUpdate = true;
+  particulasPuntos.geometry.attributes.alpha.needsUpdate = true;
+}
+
+// ============================================================
+// ACTUALIZAR CAMPO Y LECTURA
+// ============================================================
+function actualizarCampo() {
+  const intensidadHalo = Math.min(estado.I / 100, 1);
+  haloVarilla.material.opacity = estado.elemento === 'axial' ? intensidadHalo * 0.35 : 0;
+  haloEspira.material.opacity = estado.elemento === 'tangencial' ? intensidadHalo * 0.35 : 0;
+
+  crearZonaInfluencia();
+  crearOrbitas();
+  crearLineas();
+  regenerarParticulas();
+  crearAnilloLimite();
+  actualizarLectura();
+}
+
+function actualizarLectura() {
+  const s_cm = smmToCm(estado.s_mm);
+  const puntoP = new THREE.Vector3(s_cm, ALTURA_EJE_CM, 0);
+  const B = calcularB(puntoP, estado.segmentos, estado.I);
+  const BmT = B.length() * 1000;
+
+  const txt = BmT.toFixed(4);
+  document.getElementById('lectura').textContent = txt;
+  document.getElementById('hudB').textContent = txt;
+
+  actualizarDisplay(fuente, `${estado.I.toFixed(1)} A`);
+  actualizarDisplay(teslametro, `${txt} mT`);
+  return BmT;
+}
+
+function actualizarDisplay(objeto, texto) {
+  const ctx = objeto.userData.ctx;
+  const canvas = objeto.userData.canvas;
+  ctx.fillStyle = '#03050a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#4da3ff';
+  ctx.font = 'bold 60px Courier New';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = '#4da3ff';
+  ctx.shadowBlur = 20;
+  ctx.fillText(texto, canvas.width/2, canvas.height/2);
+  objeto.userData.tex.needsUpdate = true;
+}
+
+function actualizarPosicionSonda() {
+  const s_cm = smmToCm(estado.s_mm);
+  sondaGroup.position.set(s_cm / 100, 0, 0);
+}
+
+// ============================================================
+// AUDIO
+// ============================================================
+let audioCtx = null;
+let audioOsc = null;
+let audioGain = null;
+let audioNoise = null;
+let audioNoiseGain = null;
+let audioActivo = false;
+
+function iniciarAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  audioOsc = audioCtx.createOscillator();
+  audioOsc.type = 'sawtooth';
+  audioOsc.frequency.value = 55;
+
+  const lfoFreq = audioCtx.createOscillator();
+  lfoFreq.frequency.value = 0.7;
+  const lfoFreqGain = audioCtx.createGain();
+  lfoFreqGain.gain.value = 2;
+  lfoFreq.connect(lfoFreqGain);
+  lfoFreqGain.connect(audioOsc.frequency);
+
+  audioGain = audioCtx.createGain();
+  audioGain.gain.value = 0;
+
+  const filtro = audioCtx.createBiquadFilter();
+  filtro.type = 'lowpass';
+  filtro.frequency.value = 400;
+  filtro.Q.value = 5;
+
+  audioOsc.connect(filtro);
+  filtro.connect(audioGain);
+  audioGain.connect(audioCtx.destination);
+
+  const bufferSize = 2 * audioCtx.sampleRate;
+  const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+  audioNoise = audioCtx.createBufferSource();
+  audioNoise.buffer = noiseBuffer;
+  audioNoise.loop = true;
+
+  const noiseFilter = audioCtx.createBiquadFilter();
+  noiseFilter.type = 'bandpass';
+  noiseFilter.frequency.value = 2200;
+  noiseFilter.Q.value = 1.5;
+
+  audioNoiseGain = audioCtx.createGain();
+  audioNoiseGain.gain.value = 0;
+
+  audioNoise.connect(noiseFilter);
+  noiseFilter.connect(audioNoiseGain);
+  audioNoiseGain.connect(audioCtx.destination);
+
+  audioOsc.start();
+  lfoFreq.start();
+  audioNoise.start();
+}
+
+function actualizarAudio() {
+  if (!audioActivo || !audioCtx) return;
+  const volumenBase = parseFloat(document.getElementById('volumen').value) / 100;
+  const intensidad = estado.I / 100;
+  const targetGain = volumenBase * intensidad * 0.35;
+  const targetNoiseGain = volumenBase * intensidad * 0.15;
+  const frecBase = 45 + intensidad * 25;
+
+  if (audioGain) audioGain.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.15);
+  if (audioNoiseGain) audioNoiseGain.gain.setTargetAtTime(targetNoiseGain, audioCtx.currentTime, 0.15);
+  if (audioOsc) audioOsc.frequency.setTargetAtTime(frecBase, audioCtx.currentTime, 0.2);
+}
+
+// ============================================================
+// WEBXR: BOTÓN VR Y CONTROLADORES
+// ============================================================
+const vrBtn = VRButton.createButton(renderer);
+document.getElementById('VRButton-container').appendChild(vrBtn);
+
+// Referencias del rig de VR (cámara + controladores)
+const xrRig = new THREE.Group();
+scene.add(xrRig);
+
+// Controllers
+const controllerGrip0 = renderer.xr.getControllerGrip(0);
+const controllerGrip1 = renderer.xr.getControllerGrip(1);
+const controllerModelFactory = new XRControllerModelFactory();
+controllerGrip0.add(controllerModelFactory.createControllerModel(controllerGrip0));
+controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
+scene.add(controllerGrip0);
+scene.add(controllerGrip1);
+
+// Rayos láser
+function crearRayo() {
+  const geo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, 0, -1)
+  ]);
+  const mat = new THREE.LineBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.7 });
+  const line = new THREE.Line(geo, mat);
+  line.scale.z = 1.5;
+  return line;
+}
+
+const rayo0 = crearRayo();
+const rayo1 = crearRayo();
+renderer.xr.getController(0).add(rayo0);
+renderer.xr.getController(1).add(rayo1);
+scene.add(renderer.xr.getController(0));
+scene.add(renderer.xr.getController(1));
+
+// Estado de los controles
+const controlesXR = {
+  thumbstickIzqX: 0,
+  thumbstickDerY: 0,
+  gatilloIzq: false,
+  gatilloDer: false,
+  botonA_Ultimo: false,
+  botonB_Ultimo: false
+};
+
+// Sesión: cuando entra a VR
+renderer.xr.addEventListener('sessionstart', () => {
+  // Colocar la cámara del rig
+  xrRig.position.set(0, 1.5, 1.2); // usuario de pie, a 1.2 m del carril
+  controls.enabled = false;
+  document.getElementById('panel').style.display = 'none';
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('aviso').style.display = 'none';
+});
+
+renderer.xr.addEventListener('sessionend', () => {
+  controls.enabled = true;
+  document.getElementById('panel').style.display = 'block';
+  document.getElementById('hud').style.display = 'block';
+  document.getElementById('aviso').style.display = 'block';
+});
+
+// Listeners de los controladores
+function configurarControlador(index) {
+  const controller = renderer.xr.getController(index);
+
+  controller.addEventListener('selectstart', () => {
+    // Gatillo presionado
+    if (index === 0) {
+      // Gatillo izquierdo: guardar medición
+      const B = actualizarLectura();
+      agregarFila(estado.elemento, estado.I, estado.s_mm, B);
+      mostrarToast('✅ Medición guardada');
+    } else {
+      // Gatillo derecho: cambiar elemento
+      // (Alternativa: apuntar a botones 3D en el futuro)
+    }
+  });
+
+  controller.addEventListener('connected', (event) => {
+    controller.userData.gamepad = event.data.gamepad;
+    controller.userData.inputSource = event.data;
+  });
+
+  controller.addEventListener('disconnected', () => {
+    controller.userData.gamepad = null;
+  });
+}
+
+configurarControlador(0);
+configurarControlador(1);
+
+// Procesar los thumbsticks y botones cada frame
+function procesarControlesXR() {
+  const session = renderer.xr.getSession();
+  if (!session) return;
+
+  for (const src of session.inputSources) {
+    if (!src.gamepad) continue;
+    const gp = src.gamepad;
+
+    if (src.handedness === 'left') {
+      // Thumbstick X → mover la sonda
+      const x = gp.axes[2] || 0;
+      controlesXR.thumbstickIzqX = x;
+      if (Math.abs(x) > 0.15) {
+        estado.s_mm = Math.max(5, Math.min(300, estado.s_mm + x * 300 * 0.016));
+        document.getElementById('posicion').value = estado.s_mm;
+        document.getElementById('valS').textContent = estado.s_mm.toFixed(0) + ' mm';
+        document.getElementById('hudS').textContent = estado.s_mm.toFixed(1);
+        actualizarPosicionSonda();
+        actualizarLectura();
+      }
+
+      // Botón X (índice 4) → cambiar elemento
+      const botonX = gp.buttons[4] && gp.buttons[4].pressed;
+      if (botonX && !controlesXR.botonA_Ultimo) {
+        cambiarElemento();
+      }
+      controlesXR.botonA_Ultimo = botonX;
+
+      // Botón Y (índice 5) → toggle sonido
+      const botonY = gp.buttons[5] && gp.buttons[5].pressed;
+      if (botonY && !controlesXR.botonB_Ultimo) {
+        toggleSonido();
+      }
+      controlesXR.botonB_Ultimo = botonY;
+    }
+
+    if (src.handedness === 'right') {
+      // Thumbstick Y → cambiar corriente
+      const y = gp.axes[3] || 0;
+      controlesXR.thumbstickDerY = y;
+      if (Math.abs(y) > 0.15) {
+        // y positivo = joystick hacia abajo → reducir corriente
+        estado.I = Math.max(0, Math.min(100, estado.I - y * 50 * 0.016));
+        document.getElementById('corriente').value = estado.I;
+        document.getElementById('valI').textContent = estado.I.toFixed(1) + ' A';
+        document.getElementById('hudI').textContent = estado.I.toFixed(1);
+        actualizarCampo();
+        actualizarAudio();
+      }
+    }
+  }
+}
+
+function cambiarElemento() {
+  estado.elemento = estado.elemento === 'axial' ? 'tangencial' : 'axial';
+  if (estado.elemento === 'axial') {
+    varillaGroup.visible = true;
+    espiraGroup.visible = false;
+    estado.segmentos = segmentosVarilla();
+  } else {
+    varillaGroup.visible = false;
+    espiraGroup.visible = true;
+    estado.segmentos = segmentosEspira();
+  }
+  document.getElementById('elemento').value = estado.elemento;
+  actualizarCampo();
+  mostrarToast('🔀 Elemento: ' + (estado.elemento === 'axial' ? 'Varilla' : 'Espira'));
+}
+
+function toggleSonido() {
+  const btn = document.getElementById('btnSonido');
+  if (!audioActivo) {
+    iniciarAudio();
+    audioActivo = true;
+    btn.textContent = '🔊 Sonido activado';
+    btn.classList.add('activo');
+    actualizarAudio();
+    mostrarToast('🔊 Sonido activado');
+  } else {
+    audioActivo = false;
+    if (audioGain) audioGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+    if (audioNoiseGain) audioNoiseGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+    btn.textContent = '🔇 Sonido silenciado';
+    btn.classList.remove('activo');
+    mostrarToast('🔇 Sonido silenciado');
+  }
+}
+
+// ============================================================
+// UI
+// ============================================================
+document.getElementById('elemento').addEventListener('change', e => {
+  estado.elemento = e.target.value;
+  if (estado.elemento === 'axial') {
+    varillaGroup.visible = true;
+    espiraGroup.visible = false;
+    estado.segmentos = segmentosVarilla();
+  } else {
+    varillaGroup.visible = false;
+    espiraGroup.visible = true;
+    estado.segmentos = segmentosEspira();
+  }
+  actualizarCampo();
+});
+
+document.getElementById('corriente').addEventListener('input', e => {
+  estado.I = parseFloat(e.target.value);
+  document.getElementById('valI').textContent = estado.I.toFixed(1) + ' A';
+  document.getElementById('hudI').textContent = estado.I.toFixed(1);
+  actualizarCampo();
+  actualizarAudio();
+});
+
+document.getElementById('amplificacion').addEventListener('input', e => {
+  estado.amplificacion = parseFloat(e.target.value);
+  document.getElementById('valAmp').textContent = estado.amplificacion;
+  crearOrbitas();
+  crearLineas();
+  regenerarParticulas();
+});
+
+document.getElementById('posicion').addEventListener('input', e => {
+  estado.s_mm = parseFloat(e.target.value);
+  document.getElementById('valS').textContent = estado.s_mm.toFixed(0) + ' mm';
+  document.getElementById('hudS').textContent = estado.s_mm.toFixed(1);
+  actualizarPosicionSonda();
+  actualizarLectura();
+});
+
+document.getElementById('chkZona').addEventListener('change', e => { estado.mostrarZona = e.target.checked; zonaGroup.visible = estado.mostrarZona; });
+document.getElementById('chkVectores').addEventListener('change', e => { estado.mostrarVectores = e.target.checked; vectoresGroup.visible = estado.mostrarVectores; if (estado.mostrarVectores) crearOrbitas(); });
+document.getElementById('chkLineas').addEventListener('change', e => { estado.mostrarLineas = e.target.checked; lineasGroup.visible = estado.mostrarLineas; if (estado.mostrarLineas) { crearLineas(); regenerarParticulas(); } });
+document.getElementById('chkParticulas').addEventListener('change', e => { estado.mostrarParticulas = e.target.checked; particulasGroup.visible = estado.mostrarParticulas; if (estado.mostrarParticulas) regenerarParticulas(); });
+document.getElementById('chkLimite').addEventListener('change', e => { estado.mostrarLimite = e.target.checked; limiteGroup.visible = estado.mostrarLimite; crearAnilloLimite(); });
+document.getElementById('chkRotacion').addEventListener('change', e => { controls.autoRotate = e.target.checked; });
+
+document.getElementById('btnSonido').addEventListener('click', toggleSonido);
+
+document.getElementById('volumen').addEventListener('input', e => {
+  document.getElementById('valVol').textContent = e.target.value;
+  actualizarAudio();
+});
+
+// ============================================================
+// CAPTURA Y REPORTE (idéntico a la versión anterior)
+// ============================================================
+function mostrarToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+function agregarFila(elemento, I, s_mm, B) {
+  datosCapturados.push({ elemento, I, s_mm, B });
+  const tbody = document.getElementById('tablaBody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td>${datosCapturados.length}</td>
+                  <td>${elemento === 'axial' ? 'Var.' : 'Esp.'}</td>
+                  <td>${I.toFixed(1)}</td>
+                  <td>${s_mm.toFixed(0)}</td>
+                  <td>${B.toFixed(4)}</td>`;
+  tbody.appendChild(tr);
+  document.getElementById('tablaWrap').scrollTop = 99999;
+}
+
+document.getElementById('btnGuardar').addEventListener('click', () => {
+  const B = actualizarLectura();
+  agregarFila(estado.elemento, estado.I, estado.s_mm, B);
+  mostrarToast('✅ Medición guardada');
+});
+
+document.getElementById('btnBarridoI').addEventListener('click', () => {
+  const sFija = estado.s_mm;
+  const elementoActual = estado.elemento;
+  const s_cm = smmToCm(sFija);
+  for (let I = 2; I <= 30; I += 2) {
+    const p = new THREE.Vector3(s_cm, ALTURA_EJE_CM, 0);
+    const B = calcularB(p, estado.segmentos, I).length() * 1000;
+    agregarFila(elementoActual, I, sFija, B);
+  }
+  mostrarToast('🔄 Barrido B vs I guardado');
+});
+
+document.getElementById('btnBarridoS').addEventListener('click', () => {
+  const IFija = estado.I;
+  const elementoActual = estado.elemento;
+  for (let s_mm = 5; s_mm <= 300; s_mm += 5) {
+    const s_cm = smmToCm(s_mm);
+    const p = new THREE.Vector3(s_cm, ALTURA_EJE_CM, 0);
+    const B = calcularB(p, estado.segmentos, IFija).length() * 1000;
+    agregarFila(elementoActual, IFija, s_mm, B);
+  }
+  mostrarToast('🔄 Barrido B vs s guardado');
+});
+
+document.getElementById('btnLimpiar').addEventListener('click', () => {
+  datosCapturados.length = 0;
+  document.getElementById('tablaBody').innerHTML = '';
+  mostrarToast('🗑️ Tabla limpiada');
+});
+
+function generarGrafica(dataPoints, xLabel, titulo, color) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 600; canvas.height = 400;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 600, 400);
+  if (dataPoints.length < 2) return null;
+
+  const maxX = Math.max(...dataPoints.map(d => d.x));
+  const maxY = Math.max(...dataPoints.map(d => d.y));
+  const minY = 0;
+  const ox = 80, oy = 340, w = 460, h = 270;
+
+  ctx.strokeStyle = '#e5e7eb';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 5; i++) {
+    const y = oy - (i / 5) * h;
+    ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + w, y); ctx.stroke();
+    const x = ox + (i / 5) * w;
+    ctx.beginPath(); ctx.moveTo(x, oy); ctx.lineTo(x, oy - h); ctx.stroke();
+  }
+
+  ctx.strokeStyle = '#111827';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(ox, oy); ctx.lineTo(ox + w, oy);
+  ctx.moveTo(ox, oy); ctx.lineTo(ox, oy - h);
+  ctx.stroke();
+
+  ctx.fillStyle = '#111827';
+  ctx.font = 'bold 16px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(titulo, 300, 30);
+  ctx.font = '14px Arial';
+  ctx.fillText(xLabel, ox + w/2, oy + 40);
+
+  ctx.save();
+  ctx.translate(25, oy - h/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText('B (mT)', 0, 0);
+  ctx.restore();
+
+  ctx.font = '11px Arial';
+  ctx.textAlign = 'center';
+  for (let i = 0; i <= 5; i++) {
+    const v = (i / 5) * maxX;
+    const x = ox + (i / 5) * w;
+    ctx.fillText(v.toFixed(0), x, oy + 18);
+  }
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= 5; i++) {
+    const v = minY + (i / 5) * (maxY - minY);
+    const y = oy - (i / 5) * h;
+    ctx.fillText(v.toFixed(2), ox - 8, y + 4);
+  }
+
+  const ordenados = [...dataPoints].sort((a, b) => a.x - b.x);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ordenados.forEach((d, i) => {
+    const px = ox + (d.x / maxX) * w;
+    const py = oy - ((d.y - minY) / (maxY - minY)) * h;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  });
+  ctx.stroke();
+
+  ctx.fillStyle = color;
+  ordenados.forEach(d => {
+    const px = ox + (d.x / maxX) * w;
+    const py = oy - ((d.y - minY) / (maxY - minY)) * h;
+    ctx.beginPath();
+    ctx.arc(px, py, 3.5, 0, 2*Math.PI);
+    ctx.fill();
+  });
+
+  return canvas.toDataURL('image/png');
+}
+
+document.getElementById('btnReporte').addEventListener('click', async () => {
+  if (datosCapturados.length === 0) {
+    mostrarToast('⚠️ No hay datos capturados');
+    return;
+  }
+  mostrarToast('📄 Generando reporte...');
+
+  const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+          HeadingLevel, AlignmentType, WidthType, ImageRun } = window.docx;
+
+  const nombreEst = document.getElementById('nombreEst').value || 'Estudiante';
+  const fecha = new Date().toLocaleString('es-CO');
+
+  const datosElem = datosCapturados.filter(d => d.elemento === estado.elemento);
+  if (datosElem.length === 0) {
+    mostrarToast('⚠️ No hay datos del elemento actual');
+    return;
+  }
+
+  const elemNombre = estado.elemento === 'axial'
+    ? 'Varilla rectilínea perpendicular (axial)'
+    : 'Espira circular (tangencial)';
+
+  const sFijo = datosElem[0].s_mm;
+  const datosBvsI = datosElem.filter(d => d.s_mm === sFijo).map(d => ({ x: d.I, y: d.B }));
+  const IFijo = datosElem[0].I;
+  const datosBvsS = datosElem.filter(d => d.I === IFijo).map(d => ({ x: d.s_mm, y: d.B }));
+
+  let imgBvsI = null, imgBvsS = null;
+  if (datosBvsI.length > 2) imgBvsI = generarGrafica(datosBvsI, 'I (A)', 'B vs I  (s fijo)', '#2563eb');
+  if (datosBvsS.length > 2) imgBvsS = generarGrafica(datosBvsS, 's (mm)', 'B vs s  (I fijo)', '#9333ea');
+
+  function dataURLtoUint8(dataURL) {
+    const base64 = dataURL.split(',')[1];
+    const binary = atob(base64);
+    const arr = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
+    return arr;
+  }
+
+  const filas = [
+    new TableRow({
+      children: ['#', 'Elemento', 'I (A)', 's (mm)', 'B (mT)'].map(t =>
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: t, bold: true, color: 'FFFFFF' })] })],
+          shading: { fill: '2563EB' }
+        })
+      )
+    }),
+    ...datosCapturados.map((d, i) => new TableRow({
+      children: [
+        (i+1).toString(),
+        d.elemento === 'axial' ? 'Varilla' : 'Espira',
+        d.I.toFixed(1),
+        d.s_mm.toFixed(0),
+        d.B.toFixed(4)
+      ].map(t => new TableCell({ children: [new Paragraph(t)] }))
+    }))
+  ];
+
+  const children = [
+    new Paragraph({
+      children: [new TextRun({ text: 'REPORTE DE LABORATORIO', bold: true, size: 36, color: '2563EB' })],
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 200 }
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: 'Ley de Biot-Savart — Campo magnético generado por corriente eléctrica', italics: true, size: 22 })],
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 400 }
+    }),
+    new Paragraph({ children: [new TextRun({ text: `Estudiante: ${nombreEst}`, bold: true })] }),
+    new Paragraph({ children: [new TextRun({ text: `Fecha: ${fecha}` })] }),
+    new Paragraph({ children: [new TextRun({ text: `Elemento estudiado: ${elemNombre}` })], spacing: { after: 300 } }),
+    new Paragraph({ text: '1. Marco teórico', heading: HeadingLevel.HEADING_1, spacing: { before: 200, after: 150 } }),
+    new Paragraph('La ley de Biot-Savart describe el campo magnético producido por una corriente eléctrica estacionaria:'),
+    new Paragraph({ children: [new TextRun({ text: 'dB = (μ₀ I / 4π) · (dl × r̂) / r²', italics: true })], alignment: AlignmentType.CENTER, spacing: { before: 150, after: 150 } }),
+    new Paragraph('Para una varilla rectilínea larga, el campo a distancia r perpendicular vale B = μ₀ I / (2π r). Para una espira circular de radio R en su eje, B = μ₀ I R² / [2(R² + x²)^(3/2)].'),
+    new Paragraph({ text: '2. Datos experimentales', heading: HeadingLevel.HEADING_1, spacing: { before: 300, after: 150 } }),
+    new Table({ rows: filas, width: { size: 100, type: WidthType.PERCENTAGE } })
+  ];
+
+  if (imgBvsI) {
+    children.push(
+      new Paragraph({ text: '3. Gráfica B vs I', heading: HeadingLevel.HEADING_1, spacing: { before: 300, after: 150 } }),
+      new Paragraph({
+        children: [new ImageRun({ data: dataURLtoUint8(imgBvsI), transformation: { width: 500, height: 330 } })],
+        alignment: AlignmentType.CENTER
+      }),
+      new Paragraph({ children: [new TextRun({ text: 'A distancia constante, B crece linealmente con I.', italics: true, size: 20 })], spacing: { before: 100, after: 200 } })
+    );
+  }
+
+  if (imgBvsS) {
+    children.push(
+      new Paragraph({ text: '4. Gráfica B vs s', heading: HeadingLevel.HEADING_1, spacing: { before: 300, after: 150 } }),
+      new Paragraph({
+        children: [new ImageRun({ data: dataURLtoUint8(imgBvsS), transformation: { width: 500, height: 330 } })],
+        alignment: AlignmentType.CENTER
+      }),
+      new Paragraph({ children: [new TextRun({ text: 'La magnitud de B decae con la distancia: 1/r para la varilla, 1/r³ para la espira lejos de su centro.', italics: true, size: 20 })], spacing: { before: 100, after: 200 } })
+    );
+  }
+
+  children.push(
+    new Paragraph({ text: '5. Análisis y conclusiones', heading: HeadingLevel.HEADING_1, spacing: { before: 300, after: 150 } }),
+    new Paragraph('• Se corroboró experimentalmente que una corriente eléctrica genera un campo magnético medible.'),
+    new Paragraph('• El campo B es proporcional a la corriente I aplicada.'),
+    new Paragraph('• El campo decae con la distancia: 1/r para varilla, 1/r³ para espira.'),
+    new Paragraph({ children: [new TextRun({ text: 'Fuentes de error: precisión del teslámetro, alineación de la sonda, campos ambientales.', italics: true, size: 20 })], spacing: { before: 150 } })
+  );
+
+  const doc = new Document({ sections: [{ properties: {}, children }] });
+  const blob = await Packer.toBlob(doc);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Reporte_LeyBiotSavart_${nombreEst.replace(/\s+/g,'_')}.docx`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  mostrarToast('✅ Reporte descargado');
+});
+
+// ============================================================
+// LOOP
+// ============================================================
+let lastTime = performance.now();
+let timeAcc = 0;
+
+function animate() {
+  const now = performance.now();
+  const dt = Math.min((now - lastTime) / 1000, 0.1);
+  lastTime = now;
+  timeAcc += dt;
+
+  animarOrbitas(dt);
+  procesarControlesXR();
+
+  puntaSonda.material.emissiveIntensity = 0.6 + Math.sin(timeAcc * 3) * 0.3 * Math.min(estado.I / 30, 1);
+
+  zonaShells.forEach((shell, i) => {
+    const baseOp = (1 - shell.fase) * 0.10;
+    shell.mesh.material.opacity = baseOp * (0.85 + 0.15 * Math.sin(timeAcc * 1.5 + i));
+  });
+
+  animarParticulas(dt);
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+renderer.setAnimationLoop(animate);
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ============================================================
+// INIT
+// ============================================================
+actualizarPosicionSonda();
+actualizarCampo();
+</script>
+</body>
+</html>
