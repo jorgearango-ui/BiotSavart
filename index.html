@@ -231,11 +231,8 @@ const ESCALA_MUNDO = 4.5;
 // OFFSETS DEL MUNDO
 // ============================================================
 const OFFSET_X = -(CARRIL_LARGO_CM / 2 / 100) * ESCALA_MUNDO;
-const OFFSET_Y = 0.95;   // altura de la superficie de la mesa
+const OFFSET_Y = 0.95;
 const OFFSET_Z = -0.7;
-
-// El panel flotante debe estar 1 metro POR ENCIMA de la mesa
-const PANEL_ALTURA_MUNDO = OFFSET_Y + 1.0;  // = 1.95 m
 
 function posMundo(x, y, z) {
   return new THREE.Vector3(
@@ -1453,15 +1450,16 @@ xrRig.add(ctrl0);
 xrRig.add(ctrl1);
 
 // ============================================================
-// PANEL FLOTANTE — 1 METRO SOBRE LA MESA
+// PANEL FLOTANTE — POSICIÓN FIJA ABSOLUTA
 // ============================================================
 const panelVRGroup = new THREE.Group();
-// La posición exacta se calcula al entrar en VR, pero por defecto:
-// - Altura: 1 metro sobre la mesa (PANEL_ALTURA_MUNDO)
-// - Z: entre el usuario y la mesa
-panelVRGroup.position.set(0, PANEL_ALTURA_MUNDO, -0.3);
-panelVRGroup.visible = false;
-scene.add(panelVRGroup);   // ← a scene, no al rig
+// Posición ABSOLUTA FIJA, sin cálculos ni dependencias.
+// - x=0      → centrado
+// - y=1.5    → a la altura de los ojos estando de pie
+// - z=-0.3   → entre el usuario (z=0) y la mesa (z=-0.7)
+panelVRGroup.position.set(0, 1.5, -0.3);
+panelVRGroup.visible = true;   // SIEMPRE visible para diagnosticar
+scene.add(panelVRGroup);
 
 const panelFondo = new THREE.Mesh(
   new THREE.PlaneGeometry(1.0, 0.45),
@@ -1589,12 +1587,15 @@ function actualizarPanelVR() {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = '#4da3ff';
-  ctx.font = 'bold 70px Courier New';
+  ctx.font = 'bold 55px Courier New';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.shadowColor = '#4da3ff';
   ctx.shadowBlur = 20;
-  ctx.fillText(`B: ${B.toFixed(4)} mT`, 512, 64);
+  // AÑADIDO: mostrar la posición real del panel para diagnóstico
+  const pos = panelVRGroup.position;
+  const debug = ` B:${B.toFixed(3)}mT [${pos.x.toFixed(2)},${pos.y.toFixed(2)},${pos.z.toFixed(2)}]`;
+  ctx.fillText(debug, 512, 64);
   displayLecturaVR.material.map.needsUpdate = true;
 }
 
@@ -1630,35 +1631,11 @@ renderer.xr.addEventListener('sessionstart', () => {
   document.getElementById('hud').style.display = 'none';
   document.getElementById('aviso').style.display = 'none';
 
-  // Colocar el panel justo enfrente del usuario a la altura fija de
-  // 1 metro SOBRE LA MESA.
-  setTimeout(() => {
-    // Esperamos un poco para que el headset reporte su posición real
-    const xrCam = renderer.xr.getCamera();
-    const camPos = new THREE.Vector3();
-    xrCam.getWorldPosition(camPos);
-
-    // Dirección horizontal hacia donde mira el usuario
-    const dir = new THREE.Vector3();
-    xrCam.getWorldDirection(dir);
-    dir.y = 0;
-    if (dir.lengthSq() < 0.01) dir.set(0, 0, -1);
-    dir.normalize();
-
-    // El panel va 50 cm al frente del usuario (horizontalmente),
-    // pero SIEMPRE a la altura PANEL_ALTURA_MUNDO (1 metro sobre la mesa)
-    const panelPos = camPos.clone();
-    panelPos.x += dir.x * 0.5;
-    panelPos.z += dir.z * 0.5;
-    panelPos.y = PANEL_ALTURA_MUNDO;
-
-    panelVRGroup.position.copy(panelPos);
-    // El panel mira al usuario horizontalmente
-    panelVRGroup.lookAt(camPos.x, PANEL_ALTURA_MUNDO, camPos.z);
-
-    panelVRGroup.visible = true;
-    actualizarPanelVR();
-  }, 150);
+  // Forzamos la posición del panel a un valor absoluto conocido
+  panelVRGroup.position.set(0, 1.5, -0.3);
+  panelVRGroup.rotation.set(0, 0, 0);
+  panelVRGroup.visible = true;
+  actualizarPanelVR();
 });
 
 renderer.xr.addEventListener('sessionend', () => {
@@ -1666,7 +1643,7 @@ renderer.xr.addEventListener('sessionend', () => {
   document.getElementById('panel').style.display = 'block';
   document.getElementById('hud').style.display = 'block';
   document.getElementById('aviso').style.display = 'block';
-  panelVRGroup.visible = false;
+  // NO ocultamos el panel para poder verlo también en escritorio
 });
 
 function configurarControlador(index) {
@@ -2120,6 +2097,7 @@ addEventListener('resize', () => {
 // ============================================================
 actualizarPosicionSonda();
 actualizarCampo();
+actualizarPanelVR();
 </script>
 </body>
 </html>
