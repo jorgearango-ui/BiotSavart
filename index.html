@@ -1450,35 +1450,41 @@ xrRig.add(ctrl0);
 xrRig.add(ctrl1);
 
 // ============================================================
-// PANEL FLOTANTE — POSICIÓN FIJA ABSOLUTA
+// PANEL FLOTANTE VR — VERSIÓN COMPLETA CON TODOS LOS CONTROLES
 // ============================================================
 const panelVRGroup = new THREE.Group();
-// Posición ABSOLUTA FIJA, sin cálculos ni dependencias.
-// - x=0      → centrado
-// - y=1.5    → a la altura de los ojos estando de pie
-// - z=-0.3   → entre el usuario (z=0) y la mesa (z=-0.7)
-panelVRGroup.position.set(0, 1.5, -0.3);
-panelVRGroup.visible = true;   // SIEMPRE visible para diagnosticar
+// Posición: un poco más arriba y alejado de la mesa.
+// El panel queda flotando POR ENCIMA de la mesa y por detrás del borde.
+panelVRGroup.position.set(0, 1.65, -0.55);
+panelVRGroup.visible = true;
 scene.add(panelVRGroup);
 
+// Dimensiones del panel
+const PANEL_ANCHO = 1.5;
+const PANEL_ALTO = 0.85;
+
+// Fondo
 const panelFondo = new THREE.Mesh(
-  new THREE.PlaneGeometry(1.0, 0.45),
+  new THREE.PlaneGeometry(PANEL_ANCHO, PANEL_ALTO),
   new THREE.MeshBasicMaterial({
     color: 0x0a1428,
     transparent: true,
-    opacity: 0.92,
+    opacity: 0.94,
     side: THREE.DoubleSide
   })
 );
 panelVRGroup.add(panelFondo);
 
+// Borde
 const panelBorde = new THREE.LineSegments(
-  new THREE.EdgesGeometry(new THREE.PlaneGeometry(1.0, 0.45)),
+  new THREE.EdgesGeometry(new THREE.PlaneGeometry(PANEL_ANCHO, PANEL_ALTO)),
   new THREE.LineBasicMaterial({ color: 0x22d3ee })
 );
 panelVRGroup.add(panelBorde);
 
-function crearBotonVR(texto, x, y, w, h, color, onClick) {
+// Crear botón con texto escalado al tamaño
+function crearBotonVR(texto, x, y, w, h, color, onClick, fontSize) {
+  fontSize = fontSize || 40;
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 256;
@@ -1486,10 +1492,10 @@ function crearBotonVR(texto, x, y, w, h, color, onClick) {
   ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
   ctx.fillRect(0, 0, 512, 256);
   ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 10;
-  ctx.strokeRect(8, 8, 496, 240);
+  ctx.lineWidth = 8;
+  ctx.strokeRect(6, 6, 500, 244);
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 68px Arial';
+  ctx.font = 'bold ' + fontSize + 'px Arial';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(texto, 256, 128);
@@ -1504,32 +1510,33 @@ function crearBotonVR(texto, x, y, w, h, color, onClick) {
   return btn;
 }
 
+// Texto dinámico
 function crearTextoPanel(texto, x, y, size, color) {
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
   canvas.height = 128;
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = color || '#22d3ee';
-  ctx.font = 'bold 70px Arial';
+  ctx.font = 'bold 60px Arial';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.shadowColor = color || '#22d3ee';
-  ctx.shadowBlur = 15;
+  ctx.shadowBlur = 12;
   ctx.fillText(texto, 512, 64);
   const tex = new THREE.CanvasTexture(canvas);
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: tex, transparent: true
-  }));
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
   sprite.position.set(x, y, 0.003);
   sprite.scale.set(size, size * 0.125, 1);
   panelVRGroup.add(sprite);
   return sprite;
 }
 
-crearTextoPanel('⚡ LEY DE BIOT-SAVART', 0, 0.18, 0.62, '#22d3ee');
+// ============ FILA 0: Título ============
+crearTextoPanel('⚡ LEY DE BIOT-SAVART', 0, 0.34, 0.7, '#22d3ee');
 
-crearTextoPanel('Corriente', -0.32, 0.10, 0.26, '#8fa3c0');
-crearBotonVR('−', -0.38, 0.02, 0.12, 0.09, 0xdc2626, () => {
+// ============ FILA 1: Corriente | Posición ============
+crearTextoPanel('Corriente', -0.55, 0.22, 0.22, '#8fa3c0');
+crearBotonVR('−', -0.62, 0.13, 0.11, 0.09, 0xdc2626, () => {
   estado.I = Math.max(0, estado.I - 2);
   document.getElementById('corriente').value = estado.I;
   document.getElementById('valI').textContent = estado.I.toFixed(1) + ' A';
@@ -1537,8 +1544,8 @@ crearBotonVR('−', -0.38, 0.02, 0.12, 0.09, 0xdc2626, () => {
   actualizarCampo();
   actualizarAudio();
   actualizarPanelVR();
-});
-crearBotonVR('+', -0.25, 0.02, 0.12, 0.09, 0x059669, () => {
+}, 90);
+crearBotonVR('+', -0.48, 0.13, 0.11, 0.09, 0x059669, () => {
   estado.I = Math.min(100, estado.I + 2);
   document.getElementById('corriente').value = estado.I;
   document.getElementById('valI').textContent = estado.I.toFixed(1) + ' A';
@@ -1546,10 +1553,10 @@ crearBotonVR('+', -0.25, 0.02, 0.12, 0.09, 0x059669, () => {
   actualizarCampo();
   actualizarAudio();
   actualizarPanelVR();
-});
+}, 90);
 
-crearTextoPanel('Posición', 0.32, 0.10, 0.26, '#8fa3c0');
-crearBotonVR('−', 0.26, 0.02, 0.12, 0.09, 0xdc2626, () => {
+crearTextoPanel('Posición', 0.55, 0.22, 0.22, '#8fa3c0');
+crearBotonVR('−', 0.48, 0.13, 0.11, 0.09, 0xdc2626, () => {
   estado.s_mm = Math.max(5, estado.s_mm - 10);
   document.getElementById('posicion').value = estado.s_mm;
   document.getElementById('valS').textContent = estado.s_mm.toFixed(0) + ' mm';
@@ -1557,8 +1564,8 @@ crearBotonVR('−', 0.26, 0.02, 0.12, 0.09, 0xdc2626, () => {
   actualizarPosicionSonda();
   actualizarLectura();
   actualizarPanelVR();
-});
-crearBotonVR('+', 0.38, 0.02, 0.12, 0.09, 0x059669, () => {
+}, 90);
+crearBotonVR('+', 0.62, 0.13, 0.11, 0.09, 0x059669, () => {
   estado.s_mm = Math.min(300, estado.s_mm + 10);
   document.getElementById('posicion').value = estado.s_mm;
   document.getElementById('valS').textContent = estado.s_mm.toFixed(0) + ' mm';
@@ -1566,20 +1573,81 @@ crearBotonVR('+', 0.38, 0.02, 0.12, 0.09, 0x059669, () => {
   actualizarPosicionSonda();
   actualizarLectura();
   actualizarPanelVR();
-});
+}, 90);
 
-crearBotonVR('VARILLA ⟷ ESPIRA', 0, -0.08, 0.5, 0.08, 0x2563eb, () => {
+// ============ FILA 2: Elemento y Amplificación ============
+crearBotonVR('VARILLA ⟷ ESPIRA', -0.38, -0.02, 0.42, 0.08, 0x2563eb, () => {
   cambiarElemento();
   actualizarPanelVR();
-});
+}, 30);
 
-crearBotonVR('GUARDAR MEDICIÓN', 0, -0.18, 0.5, 0.08, 0x059669, () => {
+crearTextoPanel('Amp', 0.28, 0.045, 0.15, '#8fa3c0');
+crearBotonVR('−', 0.22, -0.02, 0.08, 0.08, 0xdc2626, () => {
+  estado.amplificacion = Math.max(1, estado.amplificacion - 10);
+  document.getElementById('amplificacion').value = estado.amplificacion;
+  document.getElementById('valAmp').textContent = estado.amplificacion;
+  crearOrbitas();
+  crearLineas();
+  regenerarParticulas();
+  actualizarPanelVR();
+}, 70);
+crearBotonVR('+', 0.32, -0.02, 0.08, 0.08, 0x059669, () => {
+  estado.amplificacion = Math.min(500, estado.amplificacion + 10);
+  document.getElementById('amplificacion').value = estado.amplificacion;
+  document.getElementById('valAmp').textContent = estado.amplificacion;
+  crearOrbitas();
+  crearLineas();
+  regenerarParticulas();
+  actualizarPanelVR();
+}, 70);
+
+crearTextoPanel('Visuales', 0.62, 0.045, 0.17, '#8fa3c0');
+crearBotonVR('O', 0.55, -0.02, 0.08, 0.08, 0x0891b2, () => {
+  estado.mostrarVectores = !estado.mostrarVectores;
+  vectoresGroup.visible = estado.mostrarVectores;
+  if (estado.mostrarVectores) crearOrbitas();
+  actualizarPanelVR();
+}, 55);
+crearBotonVR('L', 0.65, -0.02, 0.08, 0.08, 0x0891b2, () => {
+  estado.mostrarLineas = !estado.mostrarLineas;
+  lineasGroup.visible = estado.mostrarLineas;
+  if (estado.mostrarLineas) { crearLineas(); regenerarParticulas(); }
+  actualizarPanelVR();
+}, 55);
+
+// ============ FILA 3: Acciones ============
+crearBotonVR('GUARDAR', -0.55, -0.16, 0.32, 0.08, 0x059669, () => {
   const B = actualizarLectura();
   agregarFila(estado.elemento, estado.I, estado.s_mm, B);
-  mostrarToast('✅ Medición guardada');
-});
+  mostrarToast('✅ Guardado');
+}, 40);
+crearBotonVR('B vs I', -0.18, -0.16, 0.30, 0.08, 0x2563eb, () => {
+  const sFija = estado.s_mm;
+  const s_cm = smmToCm(sFija);
+  for (let I = 2; I <= 30; I += 2) {
+    const p = new THREE.Vector3(s_cm, ALTURA_EJE_CM, 0);
+    const B = calcularB(p, estado.segmentos, I).length() * 1000;
+    agregarFila(estado.elemento, I, sFija, B);
+  }
+  mostrarToast('🔄 B vs I');
+}, 40);
+crearBotonVR('B vs s', 0.20, -0.16, 0.30, 0.08, 0x2563eb, () => {
+  const IFija = estado.I;
+  for (let s_mm = 5; s_mm <= 300; s_mm += 5) {
+    const s_cm = smmToCm(s_mm);
+    const p = new THREE.Vector3(s_cm, ALTURA_EJE_CM, 0);
+    const B = calcularB(p, estado.segmentos, IFija).length() * 1000;
+    agregarFila(estado.elemento, IFija, s_mm, B);
+  }
+  mostrarToast('🔄 B vs s');
+}, 40);
+crearBotonVR('SONIDO', 0.58, -0.16, 0.32, 0.08, 0xf59e0b, () => {
+  toggleSonido();
+  actualizarPanelVR();
+}, 35);
 
-const displayLecturaVR = crearTextoPanel('B: 0.0000 mT', 0, -0.29, 0.55, '#4da3ff');
+// ============ FILA 4: Display ============
+const displayLecturaVR = crearTextoPanel('B: 0.0000 mT', 0, -0.30, 0.9, '#4da3ff');
 
 function actualizarPanelVR() {
   const B = actualizarLectura();
@@ -1591,14 +1659,38 @@ function actualizarPanelVR() {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.shadowColor = '#4da3ff';
-  ctx.shadowBlur = 20;
-  // AÑADIDO: mostrar la posición real del panel para diagnóstico
-  const pos = panelVRGroup.position;
-  const debug = ` B:${B.toFixed(3)}mT [${pos.x.toFixed(2)},${pos.y.toFixed(2)},${pos.z.toFixed(2)}]`;
-  ctx.fillText(debug, 512, 64);
+  ctx.shadowBlur = 18;
+  const elementoStr = estado.elemento === 'axial' ? 'Varilla' : 'Espira';
+  const sonidoStr = audioActivo ? 'ON' : 'OFF';
+  const txt = `B:${B.toFixed(4)}mT  I:${estado.I.toFixed(0)}A  s:${estado.s_mm.toFixed(0)}mm  ${elementoStr}  Amp:${estado.amplificacion}  🔊${sonidoStr}`;
+  ctx.fillText(txt, 512, 64);
   displayLecturaVR.material.map.needsUpdate = true;
 }
 
+// ============================================================
+// INTERACCIÓN CON RAYO MEJORADA
+// ============================================================
+const raycaster = new THREE.Raycaster();
+const tempMatrix = new THREE.Matrix4();
+
+function manejarClicRayo(controller) {
+  tempMatrix.identity().extractRotation(controller.matrixWorld);
+  raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+  raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+  // Intersectamos recursivamente para capturar tanto los botones como
+  // cualquier hijo dentro del panel
+  const intersects = raycaster.intersectObjects(panelVRGroup.children, false);
+
+  if (intersects.length > 0) {
+    for (const hit of intersects) {
+      if (hit.object.userData.onClick) {
+        hit.object.userData.onClick();
+        return;
+      }
+    }
+  }
+}
 // ============================================================
 // INTERACCIÓN CON RAYO
 // ============================================================
@@ -1632,7 +1724,7 @@ renderer.xr.addEventListener('sessionstart', () => {
   document.getElementById('aviso').style.display = 'none';
 
   // Forzamos la posición del panel a un valor absoluto conocido
-  panelVRGroup.position.set(0, 1.5, -0.3);
+  panelVRGroup.position.set(0, 1.65, -0.55);
   panelVRGroup.rotation.set(0, 0, 0);
   panelVRGroup.visible = true;
   actualizarPanelVR();
