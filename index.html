@@ -91,7 +91,6 @@
     display:inline-block; width:12px; height:8px; border-radius:2px;
   }
 
-  /* Botón VR posicionado abajo a la derecha */
   #VRButton-container {
     position: absolute;
     bottom: 20px;
@@ -214,7 +213,6 @@ import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFa
 const MU0 = 4 * Math.PI * 1e-7;
 const CM = 0.01;
 
-// La escena se dibuja en METROS. La física trabaja en cm.
 const CARRIL_LARGO_CM = 30;
 const ALTURA_EJE_CM = 6;
 const VARILLA_LARGO_CM = 12;
@@ -227,9 +225,8 @@ const ZONA_DEBIL_MM = 150;
 const RADIO_VISUAL_CM = 8;
 const K_DECAIMIENTO = 2.5 / RADIO_VISUAL_CM;
 
-// Factor de escala global: agranda todo para que en VR se vea mejor.
-// 1 = tamaño real (30 cm de carril). 3 = carril de 90 cm.
-const ESCALA_MUNDO = 3.0;
+// Escala global: 1 = tamaño real, mayor = más grande
+const ESCALA_MUNDO = 4.5;
 
 // ============================================================
 // ESCENA
@@ -249,29 +246,63 @@ renderer.xr.enabled = true;
 document.body.appendChild(renderer.domElement);
 
 // ============================================================
-// MUNDO: toda la escena cuelga de este grupo, escalado y colocado
-// frente al usuario
+// MUNDO: toda la escena cuelga de aquí, se sube a la mesa
 // ============================================================
 const mundo = new THREE.Group();
 mundo.scale.setScalar(ESCALA_MUNDO);
-mundo.position.set(-CARRIL_LARGO_CM / 2 / 100 * ESCALA_MUNDO, 0, -0.7);
+mundo.position.set(
+  -(CARRIL_LARGO_CM / 2 / 100) * ESCALA_MUNDO,
+  0.75,
+  -1.0
+);
 scene.add(mundo);
+
+// ============================================================
+// MESA (superficie donde descansa el carril)
+// ============================================================
+const mesaGroup = new THREE.Group();
+
+const tablero = new THREE.Mesh(
+  new THREE.BoxGeometry(1.6, 0.05, 0.9),
+  new THREE.MeshStandardMaterial({ color: 0x3a2f26, roughness: 0.85, metalness: 0.1 })
+);
+tablero.position.set(0, -0.025, 0);
+tablero.receiveShadow = true;
+tablero.castShadow = true;
+mesaGroup.add(tablero);
+
+const esquinas = [
+  [-0.72, -0.4], [0.72, -0.4],
+  [-0.72,  0.4], [0.72,  0.4]
+];
+esquinas.forEach(([x, z]) => {
+  const pata = new THREE.Mesh(
+    new THREE.BoxGeometry(0.06, 0.72, 0.06),
+    new THREE.MeshStandardMaterial({ color: 0x1f1a15, roughness: 0.9 })
+  );
+  pata.position.set(x, -0.41, z);
+  pata.castShadow = true;
+  pata.receiveShadow = true;
+  mesaGroup.add(pata);
+});
+
+scene.add(mesaGroup);
 
 // Controles de escritorio
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 0.1, 0);
+controls.target.set(0, 0.75, -1.0);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
 controls.autoRotateSpeed = 0.4;
 controls.maxPolarAngle = Math.PI * 0.49;
 
-// Cámara escritorio
-camera.position.set(0.15, 0.35, 0.55);
+camera.position.set(0.4, 1.2, 0.5);
+camera.lookAt(0, 0.75, -1.0);
 
 // ============================================================
 // LUCES
 // ============================================================
-scene.add(new THREE.AmbientLight(0x8899bb, 0.55));
+scene.add(new THREE.AmbientLight(0x8899bb, 0.6));
 
 const keyLight = new THREE.DirectionalLight(0xfff0e0, 1.0);
 keyLight.position.set(1.5, 3, 1.5);
@@ -286,10 +317,10 @@ keyLight.shadow.camera.far = 8;
 scene.add(keyLight);
 
 const p1 = new THREE.PointLight(0x4da3ff, 0.6, 4);
-p1.position.set(-1, 1.5, -1);
+p1.position.set(-1, 1.8, -0.5);
 scene.add(p1);
 const p2 = new THREE.PointLight(0xff6b4a, 0.35, 3.5);
-p2.position.set(1, 0.8, -1.5);
+p2.position.set(1, 1.2, -1.5);
 scene.add(p2);
 
 // ============================================================
@@ -300,7 +331,7 @@ grid.position.y = 0.001;
 scene.add(grid);
 
 // ============================================================
-// CARRIL ÓPTICO (dentro de `mundo`, en cm → m)
+// CARRIL ÓPTICO
 // ============================================================
 const carrilGroup = new THREE.Group();
 
@@ -1371,11 +1402,9 @@ function actualizarAudio() {
 const vrBtn = VRButton.createButton(renderer);
 document.getElementById('VRButton-container').appendChild(vrBtn);
 
-// Referencias del rig de VR (cámara + controladores)
 const xrRig = new THREE.Group();
 scene.add(xrRig);
 
-// Controllers
 const controllerGrip0 = renderer.xr.getControllerGrip(0);
 const controllerGrip1 = renderer.xr.getControllerGrip(1);
 const controllerModelFactory = new XRControllerModelFactory();
@@ -1384,7 +1413,6 @@ controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1
 scene.add(controllerGrip0);
 scene.add(controllerGrip1);
 
-// Rayos láser
 function crearRayo() {
   const geo = new THREE.BufferGeometry().setFromPoints([
     new THREE.Vector3(0, 0, 0),
@@ -1403,24 +1431,187 @@ renderer.xr.getController(1).add(rayo1);
 scene.add(renderer.xr.getController(0));
 scene.add(renderer.xr.getController(1));
 
-// Estado de los controles
 const controlesXR = {
   thumbstickIzqX: 0,
   thumbstickDerY: 0,
-  gatilloIzq: false,
-  gatilloDer: false,
   botonA_Ultimo: false,
   botonB_Ultimo: false
 };
 
-// Sesión: cuando entra a VR
+// ============================================================
+// PANEL 3D FLOTANTE PARA VR
+// ============================================================
+const panelVRGroup = new THREE.Group();
+panelVRGroup.position.set(0, 1.5, 0.3);
+panelVRGroup.visible = false;
+scene.add(panelVRGroup);
+
+const panelFondo = new THREE.Mesh(
+  new THREE.PlaneGeometry(1.1, 0.5),
+  new THREE.MeshBasicMaterial({
+    color: 0x0a1428,
+    transparent: true,
+    opacity: 0.9,
+    side: THREE.DoubleSide
+  })
+);
+panelVRGroup.add(panelFondo);
+
+const panelBorde = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.PlaneGeometry(1.1, 0.5)),
+  new THREE.LineBasicMaterial({ color: 0x22d3ee })
+);
+panelVRGroup.add(panelBorde);
+
+function crearBotonVR(texto, x, y, w, h, color, onClick) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+  ctx.fillRect(0, 0, 512, 256);
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 8;
+  ctx.strokeRect(6, 6, 500, 244);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 64px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(texto, 256, 128);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
+  const geo = new THREE.PlaneGeometry(w, h);
+  const btn = new THREE.Mesh(geo, mat);
+  btn.position.set(x, y, 0.001);
+  btn.userData.onClick = onClick;
+  panelVRGroup.add(btn);
+  return btn;
+}
+
+function crearTextoPanel(texto, x, y, size, color) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = color || '#22d3ee';
+  ctx.font = 'bold 70px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = color || '#22d3ee';
+  ctx.shadowBlur = 15;
+  ctx.fillText(texto, 512, 64);
+  const tex = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex, transparent: true, depthTest: false
+  }));
+  sprite.position.set(x, y, 0.002);
+  sprite.scale.set(size, size * 0.125, 1);
+  panelVRGroup.add(sprite);
+  return sprite;
+}
+
+crearTextoPanel('⚡ LEY DE BIOT-SAVART', 0, 0.20, 0.65, '#22d3ee');
+
+crearTextoPanel('Corriente', -0.35, 0.11, 0.28, '#8fa3c0');
+crearBotonVR('−', -0.42, 0.02, 0.13, 0.10, 0xdc2626, () => {
+  estado.I = Math.max(0, estado.I - 2);
+  document.getElementById('corriente').value = estado.I;
+  document.getElementById('valI').textContent = estado.I.toFixed(1) + ' A';
+  document.getElementById('hudI').textContent = estado.I.toFixed(1);
+  actualizarCampo();
+  actualizarAudio();
+  actualizarPanelVR();
+});
+crearBotonVR('+', -0.28, 0.02, 0.13, 0.10, 0x059669, () => {
+  estado.I = Math.min(100, estado.I + 2);
+  document.getElementById('corriente').value = estado.I;
+  document.getElementById('valI').textContent = estado.I.toFixed(1) + ' A';
+  document.getElementById('hudI').textContent = estado.I.toFixed(1);
+  actualizarCampo();
+  actualizarAudio();
+  actualizarPanelVR();
+});
+
+crearTextoPanel('Posición', 0.35, 0.11, 0.28, '#8fa3c0');
+crearBotonVR('−', 0.28, 0.02, 0.13, 0.10, 0xdc2626, () => {
+  estado.s_mm = Math.max(5, estado.s_mm - 10);
+  document.getElementById('posicion').value = estado.s_mm;
+  document.getElementById('valS').textContent = estado.s_mm.toFixed(0) + ' mm';
+  document.getElementById('hudS').textContent = estado.s_mm.toFixed(1);
+  actualizarPosicionSonda();
+  actualizarLectura();
+  actualizarPanelVR();
+});
+crearBotonVR('+', 0.42, 0.02, 0.13, 0.10, 0x059669, () => {
+  estado.s_mm = Math.min(300, estado.s_mm + 10);
+  document.getElementById('posicion').value = estado.s_mm;
+  document.getElementById('valS').textContent = estado.s_mm.toFixed(0) + ' mm';
+  document.getElementById('hudS').textContent = estado.s_mm.toFixed(1);
+  actualizarPosicionSonda();
+  actualizarLectura();
+  actualizarPanelVR();
+});
+
+crearBotonVR('VARILLA ⟷ ESPIRA', 0, -0.09, 0.55, 0.09, 0x2563eb, () => {
+  cambiarElemento();
+  actualizarPanelVR();
+});
+
+crearBotonVR('GUARDAR MEDICIÓN', 0, -0.20, 0.55, 0.09, 0x059669, () => {
+  const B = actualizarLectura();
+  agregarFila(estado.elemento, estado.I, estado.s_mm, B);
+  mostrarToast('✅ Medición guardada');
+});
+
+const displayLecturaVR = crearTextoPanel('B: 0.0000 mT', 0, -0.32, 0.6, '#4da3ff');
+
+function actualizarPanelVR() {
+  const B = actualizarLectura();
+  const canvas = displayLecturaVR.material.map.image;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#4da3ff';
+  ctx.font = 'bold 70px Courier New';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = '#4da3ff';
+  ctx.shadowBlur = 20;
+  ctx.fillText(`B: ${B.toFixed(4)} mT`, 512, 64);
+  displayLecturaVR.material.map.needsUpdate = true;
+}
+
+// ============================================================
+// INTERACCIÓN CON RAYO LÁSER
+// ============================================================
+const raycaster = new THREE.Raycaster();
+const tempMatrix = new THREE.Matrix4();
+
+function manejarClicRayo(controller) {
+  tempMatrix.identity().extractRotation(controller.matrixWorld);
+  raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+  raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+  const intersects = raycaster.intersectObjects(panelVRGroup.children, false);
+  if (intersects.length > 0) {
+    const obj = intersects[0].object;
+    if (obj.userData.onClick) {
+      obj.userData.onClick();
+    }
+  }
+}
+
+// ============================================================
+// SESIÓN XR
+// ============================================================
 renderer.xr.addEventListener('sessionstart', () => {
-  // Colocar la cámara del rig
-  xrRig.position.set(0, 1.5, 1.2); // usuario de pie, a 1.2 m del carril
+  xrRig.position.set(0, 1.6, 0.6);
   controls.enabled = false;
   document.getElementById('panel').style.display = 'none';
   document.getElementById('hud').style.display = 'none';
   document.getElementById('aviso').style.display = 'none';
+  panelVRGroup.visible = true;
+  actualizarPanelVR();
 });
 
 renderer.xr.addEventListener('sessionend', () => {
@@ -1428,30 +1619,15 @@ renderer.xr.addEventListener('sessionend', () => {
   document.getElementById('panel').style.display = 'block';
   document.getElementById('hud').style.display = 'block';
   document.getElementById('aviso').style.display = 'block';
+  panelVRGroup.visible = false;
 });
 
-// Listeners de los controladores
 function configurarControlador(index) {
   const controller = renderer.xr.getController(index);
-
-  controller.addEventListener('selectstart', () => {
-    // Gatillo presionado
-    if (index === 0) {
-      // Gatillo izquierdo: guardar medición
-      const B = actualizarLectura();
-      agregarFila(estado.elemento, estado.I, estado.s_mm, B);
-      mostrarToast('✅ Medición guardada');
-    } else {
-      // Gatillo derecho: cambiar elemento
-      // (Alternativa: apuntar a botones 3D en el futuro)
-    }
-  });
-
   controller.addEventListener('connected', (event) => {
     controller.userData.gamepad = event.data.gamepad;
     controller.userData.inputSource = event.data;
   });
-
   controller.addEventListener('disconnected', () => {
     controller.userData.gamepad = null;
   });
@@ -1460,7 +1636,16 @@ function configurarControlador(index) {
 configurarControlador(0);
 configurarControlador(1);
 
-// Procesar los thumbsticks y botones cada frame
+renderer.xr.getController(0).addEventListener('selectstart', () => {
+  const B = actualizarLectura();
+  agregarFila(estado.elemento, estado.I, estado.s_mm, B);
+  mostrarToast('✅ Medición guardada');
+});
+
+renderer.xr.getController(1).addEventListener('selectstart', () => {
+  manejarClicRayo(renderer.xr.getController(1));
+});
+
 function procesarControlesXR() {
   const session = renderer.xr.getSession();
   if (!session) return;
@@ -1470,7 +1655,6 @@ function procesarControlesXR() {
     const gp = src.gamepad;
 
     if (src.handedness === 'left') {
-      // Thumbstick X → mover la sonda
       const x = gp.axes[2] || 0;
       controlesXR.thumbstickIzqX = x;
       if (Math.abs(x) > 0.15) {
@@ -1482,14 +1666,13 @@ function procesarControlesXR() {
         actualizarLectura();
       }
 
-      // Botón X (índice 4) → cambiar elemento
       const botonX = gp.buttons[4] && gp.buttons[4].pressed;
       if (botonX && !controlesXR.botonA_Ultimo) {
         cambiarElemento();
+        actualizarPanelVR();
       }
       controlesXR.botonA_Ultimo = botonX;
 
-      // Botón Y (índice 5) → toggle sonido
       const botonY = gp.buttons[5] && gp.buttons[5].pressed;
       if (botonY && !controlesXR.botonB_Ultimo) {
         toggleSonido();
@@ -1498,11 +1681,9 @@ function procesarControlesXR() {
     }
 
     if (src.handedness === 'right') {
-      // Thumbstick Y → cambiar corriente
       const y = gp.axes[3] || 0;
       controlesXR.thumbstickDerY = y;
       if (Math.abs(y) > 0.15) {
-        // y positivo = joystick hacia abajo → reducir corriente
         estado.I = Math.max(0, Math.min(100, estado.I - y * 50 * 0.016));
         document.getElementById('corriente').value = estado.I;
         document.getElementById('valI').textContent = estado.I.toFixed(1) + ' A';
@@ -1527,7 +1708,7 @@ function cambiarElemento() {
   }
   document.getElementById('elemento').value = estado.elemento;
   actualizarCampo();
-  mostrarToast('🔀 Elemento: ' + (estado.elemento === 'axial' ? 'Varilla' : 'Espira'));
+  mostrarToast('🔀 ' + (estado.elemento === 'axial' ? 'Varilla' : 'Espira'));
 }
 
 function toggleSonido() {
@@ -1550,7 +1731,7 @@ function toggleSonido() {
 }
 
 // ============================================================
-// UI
+// UI ESCRITORIO
 // ============================================================
 document.getElementById('elemento').addEventListener('change', e => {
   estado.elemento = e.target.value;
@@ -1605,7 +1786,7 @@ document.getElementById('volumen').addEventListener('input', e => {
 });
 
 // ============================================================
-// CAPTURA Y REPORTE (idéntico a la versión anterior)
+// CAPTURA Y REPORTE
 // ============================================================
 function mostrarToast(msg) {
   const t = document.getElementById('toast');
@@ -1843,7 +2024,7 @@ document.getElementById('btnReporte').addEventListener('click', async () => {
         children: [new ImageRun({ data: dataURLtoUint8(imgBvsS), transformation: { width: 500, height: 330 } })],
         alignment: AlignmentType.CENTER
       }),
-      new Paragraph({ children: [new TextRun({ text: 'La magnitud de B decae con la distancia: 1/r para la varilla, 1/r³ para la espira lejos de su centro.', italics: true, size: 20 })], spacing: { before: 100, after: 200 } })
+      new Paragraph({ children: [new TextRun({ text: 'La magnitud de B decae con la distancia: 1/r para varilla, 1/r³ para espira lejos de su centro.', italics: true, size: 20 })], spacing: { before: 100, after: 200 } })
     );
   }
 
@@ -1907,6 +2088,7 @@ addEventListener('resize', () => {
 // ============================================================
 actualizarPosicionSonda();
 actualizarCampo();
+actualizarPanelVR();
 </script>
 </body>
 </html>
