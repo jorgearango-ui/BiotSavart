@@ -208,7 +208,7 @@ import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
 // ============================================================
-// CONSTANTES Y UNIDADES
+// CONSTANTES
 // ============================================================
 const MU0 = 4 * Math.PI * 1e-7;
 const CM = 0.01;
@@ -225,23 +225,31 @@ const ZONA_DEBIL_MM = 150;
 const RADIO_VISUAL_CM = 8;
 const K_DECAIMIENTO = 2.5 / RADIO_VISUAL_CM;
 
-// Escala global
 const ESCALA_MUNDO = 4.5;
 
 // ============================================================
-// OFFSETS DEL MUNDO (posición de la mesa)
+// OFFSETS DEL MUNDO
 // ============================================================
-// La mesa estará 70 cm al frente del usuario y a 75 cm de altura
 const OFFSET_X = -(CARRIL_LARGO_CM / 2 / 100) * ESCALA_MUNDO;
-const OFFSET_Y = 0.75;
+const OFFSET_Y = 0.95;   // altura de la superficie de la mesa
 const OFFSET_Z = -0.7;
 
-// Helper: convierte coordenadas internas a coordenadas del mundo
+// El panel flotante debe estar 1 metro POR ENCIMA de la mesa
+const PANEL_ALTURA_MUNDO = OFFSET_Y + 1.0;  // = 1.95 m
+
 function posMundo(x, y, z) {
   return new THREE.Vector3(
     OFFSET_X + x * ESCALA_MUNDO,
     OFFSET_Y + y * ESCALA_MUNDO,
     OFFSET_Z + z * ESCALA_MUNDO
+  );
+}
+
+function posMundoInverso(p) {
+  return new THREE.Vector3(
+    (p.x - OFFSET_X) / ESCALA_MUNDO * 100,
+    (p.y - OFFSET_Y) / ESCALA_MUNDO * 100,
+    (p.z - OFFSET_Z) / ESCALA_MUNDO * 100
   );
 }
 
@@ -268,7 +276,7 @@ document.body.appendChild(renderer.domElement);
 scene.add(new THREE.AmbientLight(0x8899bb, 0.6));
 
 const keyLight = new THREE.DirectionalLight(0xfff0e0, 1.0);
-keyLight.position.set(0.5, 2.5, 0.5);
+keyLight.position.set(0.5, 3.5, 0.5);
 keyLight.castShadow = true;
 keyLight.shadow.mapSize.set(2048, 2048);
 keyLight.shadow.camera.left = -1.5;
@@ -276,14 +284,14 @@ keyLight.shadow.camera.right = 1.5;
 keyLight.shadow.camera.top = 1.5;
 keyLight.shadow.camera.bottom = -1.5;
 keyLight.shadow.camera.near = 0.1;
-keyLight.shadow.camera.far = 6;
+keyLight.shadow.camera.far = 8;
 scene.add(keyLight);
 
 const p1 = new THREE.PointLight(0x4da3ff, 0.6, 4);
-p1.position.set(-0.5, 1.5, 0);
+p1.position.set(-0.5, 2, 0);
 scene.add(p1);
 const p2 = new THREE.PointLight(0xff6b4a, 0.35, 3.5);
-p2.position.set(0.5, 1.0, -1.2);
+p2.position.set(0.5, 1.4, -1.2);
 scene.add(p2);
 
 // ============================================================
@@ -313,10 +321,10 @@ const esquinas = [
 ];
 esquinas.forEach(([x, z]) => {
   const pata = new THREE.Mesh(
-    new THREE.BoxGeometry(0.06, 0.72, 0.06),
+    new THREE.BoxGeometry(0.06, OFFSET_Y - 0.05, 0.06),
     new THREE.MeshStandardMaterial({ color: 0x1f1a15, roughness: 0.9 })
   );
-  pata.position.set(x, OFFSET_Y - 0.41, OFFSET_Z + z);
+  pata.position.set(x, (OFFSET_Y - 0.05)/2, OFFSET_Z + z);
   pata.castShadow = true;
   pata.receiveShadow = true;
   mesaGroup.add(pata);
@@ -334,11 +342,11 @@ controls.dampingFactor = 0.06;
 controls.autoRotateSpeed = 0.4;
 controls.maxPolarAngle = Math.PI * 0.49;
 
-camera.position.set(0.3, 1.1, 0.5);
+camera.position.set(0.3, OFFSET_Y + 0.3, 0.5);
 camera.lookAt(0, OFFSET_Y, OFFSET_Z);
 
 // ============================================================
-// CARRIL ÓPTICO
+// CARRIL
 // ============================================================
 const carrilGroup = new THREE.Group();
 
@@ -389,9 +397,6 @@ for (let cm = 0; cm <= CARRIL_LARGO_CM; cm++) {
 }
 scene.add(carrilGroup);
 
-// ============================================================
-// TEXTOS
-// ============================================================
 function crearTexto(texto, x_cm, y_cm, z_cm, size_cm, color) {
   size_cm = size_cm || 1.0;
   color = color || '#4da3ff';
@@ -496,7 +501,7 @@ teslametro.rotation.y = -0.35;
 scene.add(teslametro);
 
 // ============================================================
-// VARILLA PERPENDICULAR (eje Z)
+// VARILLA
 // ============================================================
 const varillaGroup = new THREE.Group();
 
@@ -700,7 +705,7 @@ function smmToCm(mm) { return mm / 10; }
 const datosCapturados = [];
 
 // ============================================================
-// GRUPOS (todos los efectos van a scene directamente)
+// GRUPOS
 // ============================================================
 const zonaGroup = new THREE.Group();
 const vectoresGroup = new THREE.Group();
@@ -1249,17 +1254,8 @@ function animarParticulas(dt) {
   particulasPuntos.geometry.attributes.alpha.needsUpdate = true;
 }
 
-// Inverso de posMundo: de coordenadas del mundo a coordenadas internas (cm)
-function posMundoInverso(p) {
-  return new THREE.Vector3(
-    (p.x - OFFSET_X) / ESCALA_MUNDO * 100,
-    (p.y - OFFSET_Y) / ESCALA_MUNDO * 100,
-    (p.z - OFFSET_Z) / ESCALA_MUNDO * 100
-  );
-}
-
 // ============================================================
-// ANILLO DE LÍMITE MEDIBLE
+// ANILLO DE LÍMITE
 // ============================================================
 function crearAnilloLimite() {
   while (limiteGroup.children.length) {
@@ -1282,7 +1278,7 @@ function crearAnilloLimite() {
       posMundo(dLimiteCM/100, 0, 0),
       posMundo(dLimiteCM/100, ALTURA_EJE_CM/100 + 0.02, 0)
     ]),
-    new THREE.LineDashedMaterial({ color: 0xffaa44, dashSize: 0.004, dashSize: 0.02 * ESCALA_MUNDO, gapSize: 0.015 * ESCALA_MUNDO })
+    new THREE.LineDashedMaterial({ color: 0xffaa44, dashSize: 0.02 * ESCALA_MUNDO, gapSize: 0.015 * ESCALA_MUNDO })
   );
   linea.computeLineDistances();
   limiteGroup.add(linea);
@@ -1419,20 +1415,15 @@ function actualizarAudio() {
 }
 
 // ============================================================
-// WEBXR: BOTÓN VR Y CONTROLADORES
+// WEBXR
 // ============================================================
 const vrBtn = VRButton.createButton(renderer);
 document.getElementById('VRButton-container').appendChild(vrBtn);
 
-// ============================================================
-// RIG XR
-// ============================================================
-// El rig está en (0, 0, 0). El headset añade su altura real encima.
 const xrRig = new THREE.Group();
 xrRig.position.set(0, 0, 0);
 scene.add(xrRig);
 
-// Controllers
 const controllerGrip0 = renderer.xr.getControllerGrip(0);
 const controllerGrip1 = renderer.xr.getControllerGrip(1);
 const controllerModelFactory = new XRControllerModelFactory();
@@ -1462,13 +1453,15 @@ xrRig.add(ctrl0);
 xrRig.add(ctrl1);
 
 // ============================================================
-// PANEL 3D FLOTANTE — ES HIJO DEL RIG XR
+// PANEL FLOTANTE — 1 METRO SOBRE LA MESA
 // ============================================================
 const panelVRGroup = new THREE.Group();
-// 50 cm al frente (eje -Z en VR) y 20 cm abajo de la línea de visión
-panelVRGroup.position.set(0, -0.20, -0.55);
+// La posición exacta se calcula al entrar en VR, pero por defecto:
+// - Altura: 1 metro sobre la mesa (PANEL_ALTURA_MUNDO)
+// - Z: entre el usuario y la mesa
+panelVRGroup.position.set(0, PANEL_ALTURA_MUNDO, -0.3);
 panelVRGroup.visible = false;
-xrRig.add(panelVRGroup);
+scene.add(panelVRGroup);   // ← a scene, no al rig
 
 const panelFondo = new THREE.Mesh(
   new THREE.PlaneGeometry(1.0, 0.45),
@@ -1476,8 +1469,7 @@ const panelFondo = new THREE.Mesh(
     color: 0x0a1428,
     transparent: true,
     opacity: 0.92,
-    side: THREE.DoubleSide,
-    depthTest: false
+    side: THREE.DoubleSide
   })
 );
 panelVRGroup.add(panelFondo);
@@ -1505,7 +1497,7 @@ function crearBotonVR(texto, x, y, w, h, color, onClick) {
   ctx.fillText(texto, 256, 128);
 
   const tex = new THREE.CanvasTexture(canvas);
-  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, depthTest: false });
+  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
   const geo = new THREE.PlaneGeometry(w, h);
   const btn = new THREE.Mesh(geo, mat);
   btn.position.set(x, y, 0.002);
@@ -1528,7 +1520,7 @@ function crearTextoPanel(texto, x, y, size, color) {
   ctx.fillText(texto, 512, 64);
   const tex = new THREE.CanvasTexture(canvas);
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: tex, transparent: true, depthTest: false
+    map: tex, transparent: true
   }));
   sprite.position.set(x, y, 0.003);
   sprite.scale.set(size, size * 0.125, 1);
@@ -1607,7 +1599,7 @@ function actualizarPanelVR() {
 }
 
 // ============================================================
-// INTERACCIÓN CON RAYO LÁSER
+// INTERACCIÓN CON RAYO
 // ============================================================
 const raycaster = new THREE.Raycaster();
 const tempMatrix = new THREE.Matrix4();
@@ -1619,7 +1611,6 @@ function manejarClicRayo(controller) {
 
   const intersects = raycaster.intersectObjects(panelVRGroup.children, false);
   if (intersects.length > 0) {
-    // Buscar el primer objeto con onClick
     for (const hit of intersects) {
       if (hit.object.userData.onClick) {
         hit.object.userData.onClick();
@@ -1638,8 +1629,36 @@ renderer.xr.addEventListener('sessionstart', () => {
   document.getElementById('panel').style.display = 'none';
   document.getElementById('hud').style.display = 'none';
   document.getElementById('aviso').style.display = 'none';
-  panelVRGroup.visible = true;
-  actualizarPanelVR();
+
+  // Colocar el panel justo enfrente del usuario a la altura fija de
+  // 1 metro SOBRE LA MESA.
+  setTimeout(() => {
+    // Esperamos un poco para que el headset reporte su posición real
+    const xrCam = renderer.xr.getCamera();
+    const camPos = new THREE.Vector3();
+    xrCam.getWorldPosition(camPos);
+
+    // Dirección horizontal hacia donde mira el usuario
+    const dir = new THREE.Vector3();
+    xrCam.getWorldDirection(dir);
+    dir.y = 0;
+    if (dir.lengthSq() < 0.01) dir.set(0, 0, -1);
+    dir.normalize();
+
+    // El panel va 50 cm al frente del usuario (horizontalmente),
+    // pero SIEMPRE a la altura PANEL_ALTURA_MUNDO (1 metro sobre la mesa)
+    const panelPos = camPos.clone();
+    panelPos.x += dir.x * 0.5;
+    panelPos.z += dir.z * 0.5;
+    panelPos.y = PANEL_ALTURA_MUNDO;
+
+    panelVRGroup.position.copy(panelPos);
+    // El panel mira al usuario horizontalmente
+    panelVRGroup.lookAt(camPos.x, PANEL_ALTURA_MUNDO, camPos.z);
+
+    panelVRGroup.visible = true;
+    actualizarPanelVR();
+  }, 150);
 });
 
 renderer.xr.addEventListener('sessionend', () => {
@@ -2101,7 +2120,6 @@ addEventListener('resize', () => {
 // ============================================================
 actualizarPosicionSonda();
 actualizarCampo();
-actualizarPanelVR();
 </script>
 </body>
 </html>
