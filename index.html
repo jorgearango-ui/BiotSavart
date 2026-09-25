@@ -1450,12 +1450,11 @@ xrRig.add(ctrl0);
 xrRig.add(ctrl1);
 
 // ============================================================
-// PANEL FLOTANTE VR — VERSIÓN COMPLETA CON TODOS LOS CONTROLES
+// PANEL FLOTANTE VR — AL LADO DERECHO DE LA MESA, VERTICAL
 // ============================================================
 const panelVRGroup = new THREE.Group();
-// Posición: un poco más arriba y alejado de la mesa.
-// El panel queda flotando POR ENCIMA de la mesa y por detrás del borde.
-panelVRGroup.position.set(0, 1.65, -0.55);
+// Panel al lado derecho de la mesa, vertical, mirando al usuario.
+panelVRGroup.position.set(0.9, 1.4, -0.7);
 panelVRGroup.visible = true;
 scene.add(panelVRGroup);
 
@@ -1482,7 +1481,6 @@ const panelBorde = new THREE.LineSegments(
 );
 panelVRGroup.add(panelBorde);
 
-// Crear botón con texto escalado al tamaño
 function crearBotonVR(texto, x, y, w, h, color, onClick, fontSize) {
   fontSize = fontSize || 40;
   const canvas = document.createElement('canvas');
@@ -1510,7 +1508,6 @@ function crearBotonVR(texto, x, y, w, h, color, onClick, fontSize) {
   return btn;
 }
 
-// Texto dinámico
 function crearTextoPanel(texto, x, y, size, color) {
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
@@ -1531,10 +1528,31 @@ function crearTextoPanel(texto, x, y, size, color) {
   return sprite;
 }
 
-// ============ FILA 0: Título ============
+// Declaramos displayLecturaVR ANTES de usarlo
+const displayLecturaVR = crearTextoPanel('B: 0.0000 mT', 0, -0.30, 0.9, '#4da3ff');
+
+function actualizarPanelVR() {
+  const B = actualizarLectura();
+  const canvas = displayLecturaVR.material.map.image;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#4da3ff';
+  ctx.font = 'bold 55px Courier New';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = '#4da3ff';
+  ctx.shadowBlur = 18;
+  const elementoStr = estado.elemento === 'axial' ? 'Varilla' : 'Espira';
+  const sonidoStr = audioActivo ? 'ON' : 'OFF';
+  const txt = `B:${B.toFixed(4)}mT  I:${estado.I.toFixed(0)}A  s:${estado.s_mm.toFixed(0)}mm  ${elementoStr}  Amp:${estado.amplificacion}  🔊${sonidoStr}`;
+  ctx.fillText(txt, 512, 64);
+  displayLecturaVR.material.map.needsUpdate = true;
+}
+
+// Título
 crearTextoPanel('⚡ LEY DE BIOT-SAVART', 0, 0.34, 0.7, '#22d3ee');
 
-// ============ FILA 1: Corriente | Posición ============
+// Corriente
 crearTextoPanel('Corriente', -0.55, 0.22, 0.22, '#8fa3c0');
 crearBotonVR('−', -0.62, 0.13, 0.11, 0.09, 0xdc2626, () => {
   estado.I = Math.max(0, estado.I - 2);
@@ -1555,6 +1573,7 @@ crearBotonVR('+', -0.48, 0.13, 0.11, 0.09, 0x059669, () => {
   actualizarPanelVR();
 }, 90);
 
+// Posición
 crearTextoPanel('Posición', 0.55, 0.22, 0.22, '#8fa3c0');
 crearBotonVR('−', 0.48, 0.13, 0.11, 0.09, 0xdc2626, () => {
   estado.s_mm = Math.max(5, estado.s_mm - 10);
@@ -1575,12 +1594,13 @@ crearBotonVR('+', 0.62, 0.13, 0.11, 0.09, 0x059669, () => {
   actualizarPanelVR();
 }, 90);
 
-// ============ FILA 2: Elemento y Amplificación ============
+// Elemento
 crearBotonVR('VARILLA ⟷ ESPIRA', -0.38, -0.02, 0.42, 0.08, 0x2563eb, () => {
   cambiarElemento();
   actualizarPanelVR();
 }, 30);
 
+// Amplificación
 crearTextoPanel('Amp', 0.28, 0.045, 0.15, '#8fa3c0');
 crearBotonVR('−', 0.22, -0.02, 0.08, 0.08, 0xdc2626, () => {
   estado.amplificacion = Math.max(1, estado.amplificacion - 10);
@@ -1601,7 +1621,8 @@ crearBotonVR('+', 0.32, -0.02, 0.08, 0.08, 0x059669, () => {
   actualizarPanelVR();
 }, 70);
 
-crearTextoPanel('Visuales', 0.62, 0.045, 0.17, '#8fa3c0');
+// Toggles visuales
+crearTextoPanel('Vis', 0.62, 0.045, 0.15, '#8fa3c0');
 crearBotonVR('O', 0.55, -0.02, 0.08, 0.08, 0x0891b2, () => {
   estado.mostrarVectores = !estado.mostrarVectores;
   vectoresGroup.visible = estado.mostrarVectores;
@@ -1615,7 +1636,7 @@ crearBotonVR('L', 0.65, -0.02, 0.08, 0.08, 0x0891b2, () => {
   actualizarPanelVR();
 }, 55);
 
-// ============ FILA 3: Acciones ============
+// Acciones
 crearBotonVR('GUARDAR', -0.55, -0.16, 0.32, 0.08, 0x059669, () => {
   const B = actualizarLectura();
   agregarFila(estado.elemento, estado.I, estado.s_mm, B);
@@ -1646,29 +1667,8 @@ crearBotonVR('SONIDO', 0.58, -0.16, 0.32, 0.08, 0xf59e0b, () => {
   actualizarPanelVR();
 }, 35);
 
-// ============ FILA 4: Display ============
-const displayLecturaVR = crearTextoPanel('B: 0.0000 mT', 0, -0.30, 0.9, '#4da3ff');
-
-function actualizarPanelVR() {
-  const B = actualizarLectura();
-  const canvas = displayLecturaVR.material.map.image;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#4da3ff';
-  ctx.font = 'bold 55px Courier New';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.shadowColor = '#4da3ff';
-  ctx.shadowBlur = 18;
-  const elementoStr = estado.elemento === 'axial' ? 'Varilla' : 'Espira';
-  const sonidoStr = audioActivo ? 'ON' : 'OFF';
-  const txt = `B:${B.toFixed(4)}mT  I:${estado.I.toFixed(0)}A  s:${estado.s_mm.toFixed(0)}mm  ${elementoStr}  Amp:${estado.amplificacion}  🔊${sonidoStr}`;
-  ctx.fillText(txt, 512, 64);
-  displayLecturaVR.material.map.needsUpdate = true;
-}
-
 // ============================================================
-// INTERACCIÓN CON RAYO MEJORADA
+// INTERACCIÓN CON RAYO
 // ============================================================
 const raycaster = new THREE.Raycaster();
 const tempMatrix = new THREE.Matrix4();
@@ -1678,10 +1678,7 @@ function manejarClicRayo(controller) {
   raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
   raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
-  // Intersectamos recursivamente para capturar tanto los botones como
-  // cualquier hijo dentro del panel
   const intersects = raycaster.intersectObjects(panelVRGroup.children, false);
-
   if (intersects.length > 0) {
     for (const hit of intersects) {
       if (hit.object.userData.onClick) {
@@ -1691,7 +1688,6 @@ function manejarClicRayo(controller) {
     }
   }
 }
-
 
 // ============================================================
 // SESIÓN XR
@@ -1703,9 +1699,9 @@ renderer.xr.addEventListener('sessionstart', () => {
   document.getElementById('hud').style.display = 'none';
   document.getElementById('aviso').style.display = 'none';
 
-  // Forzamos la posición del panel a un valor absoluto conocido
-  panelVRGroup.position.set(0, 1.65, -0.55);
-  panelVRGroup.rotation.set(0, 0, 0);
+  // Panel al lado derecho, vertical, mirando al usuario
+  panelVRGroup.position.set(0.9, 1.4, -0.7);
+  panelVRGroup.lookAt(0, 1.4, 0);
   panelVRGroup.visible = true;
   actualizarPanelVR();
 });
@@ -1715,7 +1711,6 @@ renderer.xr.addEventListener('sessionend', () => {
   document.getElementById('panel').style.display = 'block';
   document.getElementById('hud').style.display = 'block';
   document.getElementById('aviso').style.display = 'block';
-  // NO ocultamos el panel para poder verlo también en escritorio
 });
 
 function configurarControlador(index) {
