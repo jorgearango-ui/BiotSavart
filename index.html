@@ -158,9 +158,6 @@
 
   <div class="seccion-titulo">Captura de datos</div>
 
-  <label>Nombre del estudiante</label>
-  <input type="text" id="nombreEst" placeholder="Ej: Ana García" value="">
-
   <button class="btn guardar" id="btnGuardar">📌 Guardar medición actual</button>
   <button class="btn" id="btnBarridoI">🔄 Barrido automático: B vs I</button>
   <button class="btn" id="btnBarridoS">🔄 Barrido automático: B vs s</button>
@@ -1412,7 +1409,7 @@ function actualizarAudio() {
 }
 
 // ============================================================
-// WEBXR
+// WEBXR — BOTÓN Y CONTROLADORES
 // ============================================================
 const vrBtn = VRButton.createButton(renderer);
 document.getElementById('VRButton-container').appendChild(vrBtn);
@@ -1450,31 +1447,30 @@ xrRig.add(ctrl0);
 xrRig.add(ctrl1);
 
 // ============================================================
-// PANEL FLOTANTE VR — AL LADO DERECHO DE LA MESA, VERTICAL
+// PANEL FLOTANTE VR — OPCIÓN A
+// Pizarra vertical al lado derecho de la mesa, mirando al usuario
 // ============================================================
 const panelVRGroup = new THREE.Group();
-// Panel al lado derecho de la mesa, vertical, mirando al usuario.
-panelVRGroup.position.set(0.9, 1.4, -0.7);
+panelVRGroup.position.set(1.0, 1.3, -0.4);
 panelVRGroup.visible = true;
 scene.add(panelVRGroup);
 
-// Dimensiones del panel
-const PANEL_ANCHO = 1.5;
-const PANEL_ALTO = 0.85;
+const PANEL_ANCHO = 1.7;
+const PANEL_ALTO = 1.0;
 
 // Fondo
 const panelFondo = new THREE.Mesh(
   new THREE.PlaneGeometry(PANEL_ANCHO, PANEL_ALTO),
   new THREE.MeshBasicMaterial({
-    color: 0x0a1428,
+    color: 0x081428,
     transparent: true,
-    opacity: 0.94,
+    opacity: 0.95,
     side: THREE.DoubleSide
   })
 );
 panelVRGroup.add(panelFondo);
 
-// Borde
+// Borde luminoso
 const panelBorde = new THREE.LineSegments(
   new THREE.EdgesGeometry(new THREE.PlaneGeometry(PANEL_ANCHO, PANEL_ALTO)),
   new THREE.LineBasicMaterial({ color: 0x22d3ee })
@@ -1490,8 +1486,8 @@ function crearBotonVR(texto, x, y, w, h, color, onClick, fontSize) {
   ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
   ctx.fillRect(0, 0, 512, 256);
   ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 8;
-  ctx.strokeRect(6, 6, 500, 244);
+  ctx.lineWidth = 10;
+  ctx.strokeRect(8, 8, 496, 240);
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold ' + fontSize + 'px Arial';
   ctx.textAlign = 'center';
@@ -1502,8 +1498,9 @@ function crearBotonVR(texto, x, y, w, h, color, onClick, fontSize) {
   const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
   const geo = new THREE.PlaneGeometry(w, h);
   const btn = new THREE.Mesh(geo, mat);
-  btn.position.set(x, y, 0.002);
+  btn.position.set(x, y, 0.003);
   btn.userData.onClick = onClick;
+  btn.userData.colorBase = color;
   panelVRGroup.add(btn);
   return btn;
 }
@@ -1522,39 +1519,18 @@ function crearTextoPanel(texto, x, y, size, color) {
   ctx.fillText(texto, 512, 64);
   const tex = new THREE.CanvasTexture(canvas);
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
-  sprite.position.set(x, y, 0.003);
+  sprite.position.set(x, y, 0.004);
   sprite.scale.set(size, size * 0.125, 1);
   panelVRGroup.add(sprite);
   return sprite;
 }
 
-// Declaramos displayLecturaVR ANTES de usarlo
-const displayLecturaVR = crearTextoPanel('B: 0.0000 mT', 0, -0.30, 0.9, '#4da3ff');
+// Fila 1: Título
+crearTextoPanel('⚡ LEY DE BIOT-SAVART', 0, 0.42, 0.9, '#22d3ee');
 
-function actualizarPanelVR() {
-  const B = actualizarLectura();
-  const canvas = displayLecturaVR.material.map.image;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#4da3ff';
-  ctx.font = 'bold 55px Courier New';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.shadowColor = '#4da3ff';
-  ctx.shadowBlur = 18;
-  const elementoStr = estado.elemento === 'axial' ? 'Varilla' : 'Espira';
-  const sonidoStr = audioActivo ? 'ON' : 'OFF';
-  const txt = `B:${B.toFixed(4)}mT  I:${estado.I.toFixed(0)}A  s:${estado.s_mm.toFixed(0)}mm  ${elementoStr}  Amp:${estado.amplificacion}  🔊${sonidoStr}`;
-  ctx.fillText(txt, 512, 64);
-  displayLecturaVR.material.map.needsUpdate = true;
-}
-
-// Título
-crearTextoPanel('⚡ LEY DE BIOT-SAVART', 0, 0.34, 0.7, '#22d3ee');
-
-// Corriente
-crearTextoPanel('Corriente', -0.55, 0.22, 0.22, '#8fa3c0');
-crearBotonVR('−', -0.62, 0.13, 0.11, 0.09, 0xdc2626, () => {
+// Fila 2: Corriente | Posición
+crearTextoPanel('Corriente (A)', -0.55, 0.30, 0.26, '#8fa3c0');
+crearBotonVR('−', -0.72, 0.20, 0.13, 0.10, 0xdc2626, () => {
   estado.I = Math.max(0, estado.I - 2);
   document.getElementById('corriente').value = estado.I;
   document.getElementById('valI').textContent = estado.I.toFixed(1) + ' A';
@@ -1563,7 +1539,7 @@ crearBotonVR('−', -0.62, 0.13, 0.11, 0.09, 0xdc2626, () => {
   actualizarAudio();
   actualizarPanelVR();
 }, 90);
-crearBotonVR('+', -0.48, 0.13, 0.11, 0.09, 0x059669, () => {
+crearBotonVR('+', -0.55, 0.20, 0.13, 0.10, 0x059669, () => {
   estado.I = Math.min(100, estado.I + 2);
   document.getElementById('corriente').value = estado.I;
   document.getElementById('valI').textContent = estado.I.toFixed(1) + ' A';
@@ -1572,10 +1548,18 @@ crearBotonVR('+', -0.48, 0.13, 0.11, 0.09, 0x059669, () => {
   actualizarAudio();
   actualizarPanelVR();
 }, 90);
+crearBotonVR('MAX', -0.38, 0.20, 0.13, 0.10, 0x9333ea, () => {
+  estado.I = 100;
+  document.getElementById('corriente').value = estado.I;
+  document.getElementById('valI').textContent = estado.I.toFixed(1) + ' A';
+  document.getElementById('hudI').textContent = estado.I.toFixed(1);
+  actualizarCampo();
+  actualizarAudio();
+  actualizarPanelVR();
+}, 40);
 
-// Posición
-crearTextoPanel('Posición', 0.55, 0.22, 0.22, '#8fa3c0');
-crearBotonVR('−', 0.48, 0.13, 0.11, 0.09, 0xdc2626, () => {
+crearTextoPanel('Posición (mm)', 0.55, 0.30, 0.26, '#8fa3c0');
+crearBotonVR('−', 0.38, 0.20, 0.13, 0.10, 0xdc2626, () => {
   estado.s_mm = Math.max(5, estado.s_mm - 10);
   document.getElementById('posicion').value = estado.s_mm;
   document.getElementById('valS').textContent = estado.s_mm.toFixed(0) + ' mm';
@@ -1584,7 +1568,7 @@ crearBotonVR('−', 0.48, 0.13, 0.11, 0.09, 0xdc2626, () => {
   actualizarLectura();
   actualizarPanelVR();
 }, 90);
-crearBotonVR('+', 0.62, 0.13, 0.11, 0.09, 0x059669, () => {
+crearBotonVR('+', 0.55, 0.20, 0.13, 0.10, 0x059669, () => {
   estado.s_mm = Math.min(300, estado.s_mm + 10);
   document.getElementById('posicion').value = estado.s_mm;
   document.getElementById('valS').textContent = estado.s_mm.toFixed(0) + ' mm';
@@ -1593,56 +1577,104 @@ crearBotonVR('+', 0.62, 0.13, 0.11, 0.09, 0x059669, () => {
   actualizarLectura();
   actualizarPanelVR();
 }, 90);
+crearBotonVR('MIN', 0.72, 0.20, 0.13, 0.10, 0x9333ea, () => {
+  estado.s_mm = 5;
+  document.getElementById('posicion').value = estado.s_mm;
+  document.getElementById('valS').textContent = estado.s_mm.toFixed(0) + ' mm';
+  document.getElementById('hudS').textContent = estado.s_mm.toFixed(1);
+  actualizarPosicionSonda();
+  actualizarLectura();
+  actualizarPanelVR();
+}, 40);
 
-// Elemento
-crearBotonVR('VARILLA ⟷ ESPIRA', -0.38, -0.02, 0.42, 0.08, 0x2563eb, () => {
+// Fila 3: Elemento | Amplificación | Sonido
+crearBotonVR('VARILLA ⟷ ESPIRA', -0.55, 0.03, 0.55, 0.10, 0x2563eb, () => {
   cambiarElemento();
   actualizarPanelVR();
 }, 30);
 
-// Amplificación
-crearTextoPanel('Amp', 0.28, 0.045, 0.15, '#8fa3c0');
-crearBotonVR('−', 0.22, -0.02, 0.08, 0.08, 0xdc2626, () => {
+crearTextoPanel('Amp', 0.40, 0.09, 0.18, '#8fa3c0');
+crearBotonVR('−', 0.32, 0.03, 0.11, 0.10, 0xdc2626, () => {
   estado.amplificacion = Math.max(1, estado.amplificacion - 10);
   document.getElementById('amplificacion').value = estado.amplificacion;
   document.getElementById('valAmp').textContent = estado.amplificacion;
-  crearOrbitas();
-  crearLineas();
-  regenerarParticulas();
+  crearOrbitas(); crearLineas(); regenerarParticulas();
   actualizarPanelVR();
-}, 70);
-crearBotonVR('+', 0.32, -0.02, 0.08, 0.08, 0x059669, () => {
+}, 90);
+crearBotonVR('+', 0.45, 0.03, 0.11, 0.10, 0x059669, () => {
   estado.amplificacion = Math.min(500, estado.amplificacion + 10);
   document.getElementById('amplificacion').value = estado.amplificacion;
   document.getElementById('valAmp').textContent = estado.amplificacion;
-  crearOrbitas();
-  crearLineas();
-  regenerarParticulas();
+  crearOrbitas(); crearLineas(); regenerarParticulas();
   actualizarPanelVR();
-}, 70);
+}, 90);
 
-// Toggles visuales
-crearTextoPanel('Vis', 0.62, 0.045, 0.15, '#8fa3c0');
-crearBotonVR('O', 0.55, -0.02, 0.08, 0.08, 0x0891b2, () => {
+crearTextoPanel('Sonido', 0.70, 0.09, 0.18, '#8fa3c0');
+crearBotonVR('🔊', 0.68, 0.03, 0.15, 0.10, 0xf59e0b, () => {
+  toggleSonido();
+  actualizarPanelVR();
+}, 55);
+
+// Fila 4: Toggles visuales
+crearTextoPanel('Zona', -0.70, -0.13, 0.16, '#8fa3c0');
+crearBotonVR('Z', -0.70, -0.22, 0.12, 0.09, 0x0891b2, () => {
+  estado.mostrarZona = !estado.mostrarZona;
+  zonaGroup.visible = estado.mostrarZona;
+  document.getElementById('chkZona').checked = estado.mostrarZona;
+  actualizarPanelVR();
+}, 50);
+
+crearTextoPanel('Orbit', -0.46, -0.13, 0.16, '#8fa3c0');
+crearBotonVR('O', -0.46, -0.22, 0.12, 0.09, 0x0891b2, () => {
   estado.mostrarVectores = !estado.mostrarVectores;
   vectoresGroup.visible = estado.mostrarVectores;
+  document.getElementById('chkVectores').checked = estado.mostrarVectores;
   if (estado.mostrarVectores) crearOrbitas();
   actualizarPanelVR();
-}, 55);
-crearBotonVR('L', 0.65, -0.02, 0.08, 0.08, 0x0891b2, () => {
+}, 50);
+
+crearTextoPanel('Líneas', -0.22, -0.13, 0.16, '#8fa3c0');
+crearBotonVR('L', -0.22, -0.22, 0.12, 0.09, 0x0891b2, () => {
   estado.mostrarLineas = !estado.mostrarLineas;
   lineasGroup.visible = estado.mostrarLineas;
+  document.getElementById('chkLineas').checked = estado.mostrarLineas;
   if (estado.mostrarLineas) { crearLineas(); regenerarParticulas(); }
   actualizarPanelVR();
-}, 55);
+}, 50);
 
-// Acciones
-crearBotonVR('GUARDAR', -0.55, -0.16, 0.32, 0.08, 0x059669, () => {
+crearTextoPanel('Partíc', 0.02, -0.13, 0.16, '#8fa3c0');
+crearBotonVR('P', 0.02, -0.22, 0.12, 0.09, 0x0891b2, () => {
+  estado.mostrarParticulas = !estado.mostrarParticulas;
+  particulasGroup.visible = estado.mostrarParticulas;
+  document.getElementById('chkParticulas').checked = estado.mostrarParticulas;
+  if (estado.mostrarParticulas) regenerarParticulas();
+  actualizarPanelVR();
+}, 50);
+
+crearTextoPanel('Límite', 0.26, -0.13, 0.16, '#8fa3c0');
+crearBotonVR('M', 0.26, -0.22, 0.12, 0.09, 0x0891b2, () => {
+  estado.mostrarLimite = !estado.mostrarLimite;
+  limiteGroup.visible = estado.mostrarLimite;
+  document.getElementById('chkLimite').checked = estado.mostrarLimite;
+  crearAnilloLimite();
+  actualizarPanelVR();
+}, 50);
+
+crearTextoPanel('Rotar', 0.50, -0.13, 0.16, '#8fa3c0');
+crearBotonVR('R', 0.50, -0.22, 0.12, 0.09, 0x0891b2, () => {
+  controls.autoRotate = !controls.autoRotate;
+  document.getElementById('chkRotacion').checked = controls.autoRotate;
+  actualizarPanelVR();
+}, 50);
+
+// Fila 5: Acciones
+crearBotonVR('📌 GUARDAR', -0.62, -0.40, 0.35, 0.09, 0x059669, () => {
   const B = actualizarLectura();
   agregarFila(estado.elemento, estado.I, estado.s_mm, B);
   mostrarToast('✅ Guardado');
-}, 40);
-crearBotonVR('B vs I', -0.18, -0.16, 0.30, 0.08, 0x2563eb, () => {
+}, 32);
+
+crearBotonVR('B vs I', -0.24, -0.40, 0.28, 0.09, 0x2563eb, () => {
   const sFija = estado.s_mm;
   const s_cm = smmToCm(sFija);
   for (let I = 2; I <= 30; I += 2) {
@@ -1651,8 +1683,9 @@ crearBotonVR('B vs I', -0.18, -0.16, 0.30, 0.08, 0x2563eb, () => {
     agregarFila(estado.elemento, I, sFija, B);
   }
   mostrarToast('🔄 B vs I');
-}, 40);
-crearBotonVR('B vs s', 0.20, -0.16, 0.30, 0.08, 0x2563eb, () => {
+}, 32);
+
+crearBotonVR('B vs s', 0.10, -0.40, 0.28, 0.09, 0x2563eb, () => {
   const IFija = estado.I;
   for (let s_mm = 5; s_mm <= 300; s_mm += 5) {
     const s_cm = smmToCm(s_mm);
@@ -1661,14 +1694,61 @@ crearBotonVR('B vs s', 0.20, -0.16, 0.30, 0.08, 0x2563eb, () => {
     agregarFila(estado.elemento, IFija, s_mm, B);
   }
   mostrarToast('🔄 B vs s');
-}, 40);
-crearBotonVR('SONIDO', 0.58, -0.16, 0.32, 0.08, 0xf59e0b, () => {
-  toggleSonido();
+}, 32);
+
+crearBotonVR('📄 REPORTE', 0.52, -0.40, 0.50, 0.09, 0x9333ea, () => {
+  document.getElementById('btnReporte').click();
+}, 30);
+
+crearBotonVR('🗑️ LIMPIAR', 0.10, -0.52, 0.42, 0.08, 0xdc2626, () => {
+  datosCapturados.length = 0;
+  document.getElementById('tablaBody').innerHTML = '';
+  mostrarToast('🗑️ Tabla limpiada');
+}, 28);
+
+crearBotonVR('🔄 RESET', -0.55, -0.52, 0.42, 0.08, 0x0891b2, () => {
+  // Reset suave de valores
+  estado.I = 15;
+  estado.s_mm = 100;
+  estado.amplificacion = 50;
+  document.getElementById('corriente').value = estado.I;
+  document.getElementById('valI').textContent = estado.I.toFixed(1) + ' A';
+  document.getElementById('hudI').textContent = estado.I.toFixed(1);
+  document.getElementById('posicion').value = estado.s_mm;
+  document.getElementById('valS').textContent = estado.s_mm.toFixed(0) + ' mm';
+  document.getElementById('hudS').textContent = estado.s_mm.toFixed(1);
+  document.getElementById('amplificacion').value = estado.amplificacion;
+  document.getElementById('valAmp').textContent = estado.amplificacion;
+  actualizarPosicionSonda();
+  actualizarCampo();
+  actualizarAudio();
   actualizarPanelVR();
-}, 35);
+  mostrarToast('🔄 Valores reseteados');
+}, 28);
+
+// Fila 6: Display en vivo
+const displayLecturaVR = crearTextoPanel('B: 0.0000 mT', 0, -0.65, 1.2, '#4da3ff');
+
+function actualizarPanelVR() {
+  const B = actualizarLectura();
+  const canvas = displayLecturaVR.material.map.image;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#4da3ff';
+  ctx.font = 'bold 52px Courier New';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = '#4da3ff';
+  ctx.shadowBlur = 18;
+  const elementoStr = estado.elemento === 'axial' ? 'VARILLA' : 'ESPIRA';
+  const sonidoStr = audioActivo ? '🔊' : '🔇';
+  const txt = `${elementoStr} | B:${B.toFixed(3)}mT | I:${estado.I.toFixed(0)}A | s:${estado.s_mm.toFixed(0)}mm ${sonidoStr}`;
+  ctx.fillText(txt, 512, 64);
+  displayLecturaVR.material.map.needsUpdate = true;
+}
 
 // ============================================================
-// INTERACCIÓN CON RAYO
+// INTERACCIÓN CON RAYO LÁSER DEL MANDO DERECHO
 // ============================================================
 const raycaster = new THREE.Raycaster();
 const tempMatrix = new THREE.Matrix4();
@@ -1677,13 +1757,26 @@ function manejarClicRayo(controller) {
   tempMatrix.identity().extractRotation(controller.matrixWorld);
   raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
   raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+  raycaster.far = 20;
 
-  const intersects = raycaster.intersectObjects(panelVRGroup.children, false);
+  const intersects = raycaster.intersectObjects(panelVRGroup.children, true);
+
   if (intersects.length > 0) {
     for (const hit of intersects) {
-      if (hit.object.userData.onClick) {
-        hit.object.userData.onClick();
-        return;
+      let obj = hit.object;
+      while (obj && obj !== panelVRGroup) {
+        if (obj.userData && typeof obj.userData.onClick === 'function') {
+          // Feedback: destello blanco
+          const mat = obj.material;
+          if (mat && mat.color) {
+            const original = mat.color.getHex();
+            mat.color.setHex(0xffffff);
+            setTimeout(() => { if (mat) mat.color.setHex(original); }, 100);
+          }
+          obj.userData.onClick();
+          return;
+        }
+        obj = obj.parent;
       }
     }
   }
@@ -1699,9 +1792,9 @@ renderer.xr.addEventListener('sessionstart', () => {
   document.getElementById('hud').style.display = 'none';
   document.getElementById('aviso').style.display = 'none';
 
-  // Panel al lado derecho, vertical, mirando al usuario
-  panelVRGroup.position.set(0.9, 1.4, -0.7);
-  panelVRGroup.lookAt(0, 1.4, 0);
+  // Panel: pizarra vertical al lado derecho, mirando al usuario
+  panelVRGroup.position.set(1.0, 1.3, -0.4);
+  panelVRGroup.lookAt(0, 1.3, 0);
   panelVRGroup.visible = true;
   actualizarPanelVR();
 });
@@ -1727,12 +1820,14 @@ function configurarControlador(index) {
 configurarControlador(0);
 configurarControlador(1);
 
+// Gatillo izquierdo: guardar medición rápida
 renderer.xr.getController(0).addEventListener('selectstart', () => {
   const B = actualizarLectura();
   agregarFila(estado.elemento, estado.I, estado.s_mm, B);
   mostrarToast('✅ Medición guardada');
 });
 
+// Gatillo derecho: interactuar con el panel
 renderer.xr.getController(1).addEventListener('selectstart', () => {
   manejarClicRayo(renderer.xr.getController(1));
 });
@@ -1862,7 +1957,7 @@ document.getElementById('volumen').addEventListener('input', e => {
 });
 
 // ============================================================
-// CAPTURA Y REPORTE
+// CAPTURA DE DATOS Y REPORTE
 // ============================================================
 function mostrarToast(msg) {
   const t = document.getElementById('toast');
@@ -2010,7 +2105,6 @@ document.getElementById('btnReporte').addEventListener('click', async () => {
   const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
           HeadingLevel, AlignmentType, WidthType, ImageRun } = window.docx;
 
-  const nombreEst = document.getElementById('nombreEst').value || 'Estudiante';
   const fecha = new Date().toLocaleString('es-CO');
 
   const datosElem = datosCapturados.filter(d => d.elemento === estado.elemento);
@@ -2071,7 +2165,6 @@ document.getElementById('btnReporte').addEventListener('click', async () => {
       alignment: AlignmentType.CENTER,
       spacing: { after: 400 }
     }),
-    new Paragraph({ children: [new TextRun({ text: `Estudiante: ${nombreEst}`, bold: true })] }),
     new Paragraph({ children: [new TextRun({ text: `Fecha: ${fecha}` })] }),
     new Paragraph({ children: [new TextRun({ text: `Elemento estudiado: ${elemNombre}` })], spacing: { after: 300 } }),
     new Paragraph({ text: '1. Marco teórico', heading: HeadingLevel.HEADING_1, spacing: { before: 200, after: 150 } }),
@@ -2117,11 +2210,11 @@ document.getElementById('btnReporte').addEventListener('click', async () => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `Reporte_LeyBiotSavart_${nombreEst.replace(/\s+/g,'_')}.docx`;
+  a.download = `Reporte_LeyBiotSavart_${Date.now()}.docx`;
   a.click();
   URL.revokeObjectURL(url);
 
-  mostrarToast('✅ Reporte descargado');
+  mostrarToast('✅ Reporte descargado en Descargas');
 });
 
 // ============================================================
