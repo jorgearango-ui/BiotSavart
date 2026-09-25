@@ -225,8 +225,25 @@ const ZONA_DEBIL_MM = 150;
 const RADIO_VISUAL_CM = 8;
 const K_DECAIMIENTO = 2.5 / RADIO_VISUAL_CM;
 
-// Escala global: 1 = tamaño real, mayor = más grande
+// Escala global
 const ESCALA_MUNDO = 4.5;
+
+// ============================================================
+// OFFSETS DEL MUNDO (posición de la mesa)
+// ============================================================
+// La mesa estará 70 cm al frente del usuario y a 75 cm de altura
+const OFFSET_X = -(CARRIL_LARGO_CM / 2 / 100) * ESCALA_MUNDO;
+const OFFSET_Y = 0.75;
+const OFFSET_Z = -0.7;
+
+// Helper: convierte coordenadas internas a coordenadas del mundo
+function posMundo(x, y, z) {
+  return new THREE.Vector3(
+    OFFSET_X + x * ESCALA_MUNDO,
+    OFFSET_Y + y * ESCALA_MUNDO,
+    OFFSET_Z + z * ESCALA_MUNDO
+  );
+}
 
 // ============================================================
 // ESCENA
@@ -246,19 +263,38 @@ renderer.xr.enabled = true;
 document.body.appendChild(renderer.domElement);
 
 // ============================================================
-// MUNDO: toda la escena cuelga de aquí, se sube a la mesa
+// LUCES
 // ============================================================
-const mundo = new THREE.Group();
-mundo.scale.setScalar(ESCALA_MUNDO);
-mundo.position.set(
-  -(CARRIL_LARGO_CM / 2 / 100) * ESCALA_MUNDO,
-  0.75,
-  -1.0
-);
-scene.add(mundo);
+scene.add(new THREE.AmbientLight(0x8899bb, 0.6));
+
+const keyLight = new THREE.DirectionalLight(0xfff0e0, 1.0);
+keyLight.position.set(0.5, 2.5, 0.5);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(2048, 2048);
+keyLight.shadow.camera.left = -1.5;
+keyLight.shadow.camera.right = 1.5;
+keyLight.shadow.camera.top = 1.5;
+keyLight.shadow.camera.bottom = -1.5;
+keyLight.shadow.camera.near = 0.1;
+keyLight.shadow.camera.far = 6;
+scene.add(keyLight);
+
+const p1 = new THREE.PointLight(0x4da3ff, 0.6, 4);
+p1.position.set(-0.5, 1.5, 0);
+scene.add(p1);
+const p2 = new THREE.PointLight(0xff6b4a, 0.35, 3.5);
+p2.position.set(0.5, 1.0, -1.2);
+scene.add(p2);
 
 // ============================================================
-// MESA (superficie donde descansa el carril)
+// SUELO
+// ============================================================
+const grid = new THREE.GridHelper(8, 80, 0x18202e, 0x10161f);
+grid.position.y = 0.001;
+scene.add(grid);
+
+// ============================================================
+// MESA
 // ============================================================
 const mesaGroup = new THREE.Group();
 
@@ -266,7 +302,7 @@ const tablero = new THREE.Mesh(
   new THREE.BoxGeometry(1.6, 0.05, 0.9),
   new THREE.MeshStandardMaterial({ color: 0x3a2f26, roughness: 0.85, metalness: 0.1 })
 );
-tablero.position.set(0, -0.025, 0);
+tablero.position.set(0, OFFSET_Y - 0.025, OFFSET_Z);
 tablero.receiveShadow = true;
 tablero.castShadow = true;
 mesaGroup.add(tablero);
@@ -280,7 +316,7 @@ esquinas.forEach(([x, z]) => {
     new THREE.BoxGeometry(0.06, 0.72, 0.06),
     new THREE.MeshStandardMaterial({ color: 0x1f1a15, roughness: 0.9 })
   );
-  pata.position.set(x, -0.41, z);
+  pata.position.set(x, OFFSET_Y - 0.41, OFFSET_Z + z);
   pata.castShadow = true;
   pata.receiveShadow = true;
   mesaGroup.add(pata);
@@ -288,47 +324,18 @@ esquinas.forEach(([x, z]) => {
 
 scene.add(mesaGroup);
 
-// Controles de escritorio
+// ============================================================
+// CONTROLES ESCRITORIO
+// ============================================================
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 0.75, -1.0);
+controls.target.set(0, OFFSET_Y, OFFSET_Z);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
 controls.autoRotateSpeed = 0.4;
 controls.maxPolarAngle = Math.PI * 0.49;
 
-camera.position.set(0.4, 1.2, 0.5);
-camera.lookAt(0, 0.75, -1.0);
-
-// ============================================================
-// LUCES
-// ============================================================
-scene.add(new THREE.AmbientLight(0x8899bb, 0.6));
-
-const keyLight = new THREE.DirectionalLight(0xfff0e0, 1.0);
-keyLight.position.set(1.5, 3, 1.5);
-keyLight.castShadow = true;
-keyLight.shadow.mapSize.set(2048, 2048);
-keyLight.shadow.camera.left = -2;
-keyLight.shadow.camera.right = 2;
-keyLight.shadow.camera.top = 2;
-keyLight.shadow.camera.bottom = -2;
-keyLight.shadow.camera.near = 0.1;
-keyLight.shadow.camera.far = 8;
-scene.add(keyLight);
-
-const p1 = new THREE.PointLight(0x4da3ff, 0.6, 4);
-p1.position.set(-1, 1.8, -0.5);
-scene.add(p1);
-const p2 = new THREE.PointLight(0xff6b4a, 0.35, 3.5);
-p2.position.set(1, 1.2, -1.5);
-scene.add(p2);
-
-// ============================================================
-// SUELO
-// ============================================================
-const grid = new THREE.GridHelper(8, 80, 0x18202e, 0x10161f);
-grid.position.y = 0.001;
-scene.add(grid);
+camera.position.set(0.3, 1.1, 0.5);
+camera.lookAt(0, OFFSET_Y, OFFSET_Z);
 
 // ============================================================
 // CARRIL ÓPTICO
@@ -336,31 +343,32 @@ scene.add(grid);
 const carrilGroup = new THREE.Group();
 
 const carrilBase = new THREE.Mesh(
-  new THREE.BoxGeometry((CARRIL_LARGO_CM + 4) / 100, 0.006, 0.025),
+  new THREE.BoxGeometry((CARRIL_LARGO_CM + 4) / 100 * ESCALA_MUNDO, 0.006 * ESCALA_MUNDO, 0.025 * ESCALA_MUNDO),
   new THREE.MeshStandardMaterial({ color: 0x3a4a5c, metalness: 0.85, roughness: 0.35 })
 );
-carrilBase.position.set(CARRIL_LARGO_CM/2 / 100, 0.003, 0);
+carrilBase.position.copy(posMundo(CARRIL_LARGO_CM/2 / 100, 0.003, 0));
 carrilBase.receiveShadow = true;
 carrilBase.castShadow = true;
 carrilGroup.add(carrilBase);
 
 const ranura = new THREE.Mesh(
-  new THREE.BoxGeometry((CARRIL_LARGO_CM + 4) / 100, 0.002, 0.004),
+  new THREE.BoxGeometry((CARRIL_LARGO_CM + 4) / 100 * ESCALA_MUNDO, 0.002 * ESCALA_MUNDO, 0.004 * ESCALA_MUNDO),
   new THREE.MeshStandardMaterial({ color: 0x0a0e18, roughness: 0.9 })
 );
-ranura.position.set(CARRIL_LARGO_CM/2 / 100, 0.0065, 0);
+ranura.position.copy(posMundo(CARRIL_LARGO_CM/2 / 100, 0.0065, 0));
 carrilGroup.add(ranura);
 
 function crearTiraZona(x0_cm, x1_cm, color, opacidad) {
-  const ancho = (x1_cm - x0_cm) / 100;
-  const geo = new THREE.PlaneGeometry(ancho, 0.008);
+  const ancho = (x1_cm - x0_cm) / 100 * ESCALA_MUNDO;
+  const geo = new THREE.PlaneGeometry(ancho, 0.008 * ESCALA_MUNDO);
   const mat = new THREE.MeshBasicMaterial({
     color, transparent: true, opacity: opacidad,
     side: THREE.DoubleSide, depthWrite: false
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2;
-  mesh.position.set((x0_cm + (x1_cm - x0_cm)/2) / 100, 0.0067, 0);
+  const cx = (x0_cm + (x1_cm - x0_cm)/2) / 100;
+  mesh.position.copy(posMundo(cx, 0.0067, 0));
   return mesh;
 }
 
@@ -373,14 +381,17 @@ const matMarcaGrande = new THREE.MeshStandardMaterial({ color: 0xffffff, emissiv
 for (let cm = 0; cm <= CARRIL_LARGO_CM; cm++) {
   const esGrande = cm % 5 === 0;
   const marca = new THREE.Mesh(
-    new THREE.BoxGeometry(0.0006, 0.006, esGrande ? 0.01 : 0.005),
+    new THREE.BoxGeometry(0.0006 * ESCALA_MUNDO, 0.006 * ESCALA_MUNDO, (esGrande ? 0.01 : 0.005) * ESCALA_MUNDO),
     esGrande ? matMarcaGrande : matMarca
   );
-  marca.position.set(cm / 100, 0.0065, 0.01);
+  marca.position.copy(posMundo(cm / 100, 0.0065, 0.01));
   carrilGroup.add(marca);
 }
-mundo.add(carrilGroup);
+scene.add(carrilGroup);
 
+// ============================================================
+// TEXTOS
+// ============================================================
 function crearTexto(texto, x_cm, y_cm, z_cm, size_cm, color) {
   size_cm = size_cm || 1.0;
   color = color || '#4da3ff';
@@ -394,15 +405,15 @@ function crearTexto(texto, x_cm, y_cm, z_cm, size_cm, color) {
   ctx.fillText(texto, 128, 32);
   const tex = new THREE.CanvasTexture(canvas);
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-  sprite.position.set(x_cm / 100, y_cm / 100, z_cm / 100);
-  sprite.scale.set(size_cm * 2 / 100, size_cm * 0.5 / 100, 1);
+  sprite.position.copy(posMundo(x_cm / 100, y_cm / 100, z_cm / 100));
+  sprite.scale.set(size_cm * 2 / 100 * ESCALA_MUNDO, size_cm * 0.5 / 100 * ESCALA_MUNDO, 1);
   return sprite;
 }
 
 for (let cm = 0; cm <= CARRIL_LARGO_CM; cm += 5) {
-  mundo.add(crearTexto(cm + 'cm', cm, 1.4, 1.8, 1.0));
+  scene.add(crearTexto(cm + 'cm', cm, 1.4, 1.8, 1.0));
 }
-mundo.add(crearTexto('origen', 0, ALTURA_EJE_CM + 3.5, 0, 1.2, '#ff8844'));
+scene.add(crearTexto('origen', 0, ALTURA_EJE_CM + 3.5, 0, 1.2, '#ff8844'));
 
 // ============================================================
 // FUENTE
@@ -410,18 +421,18 @@ mundo.add(crearTexto('origen', 0, ALTURA_EJE_CM + 3.5, 0, 1.2, '#ff8844'));
 function crearFuente() {
   const g = new THREE.Group();
   const cuerpo = new THREE.Mesh(
-    new THREE.BoxGeometry(0.05, 0.045, 0.04),
+    new THREE.BoxGeometry(0.05 * ESCALA_MUNDO, 0.045 * ESCALA_MUNDO, 0.04 * ESCALA_MUNDO),
     new THREE.MeshStandardMaterial({ color: 0x2a3548, metalness: 0.6, roughness: 0.4 })
   );
-  cuerpo.position.y = 0.0225;
+  cuerpo.position.y = 0.0225 * ESCALA_MUNDO;
   cuerpo.castShadow = true;
   g.add(cuerpo);
 
   const panel = new THREE.Mesh(
-    new THREE.BoxGeometry(0.046, 0.04, 0.001),
+    new THREE.BoxGeometry(0.046 * ESCALA_MUNDO, 0.04 * ESCALA_MUNDO, 0.001 * ESCALA_MUNDO),
     new THREE.MeshStandardMaterial({ color: 0x0a0e18, metalness: 0.5, roughness: 0.6 })
   );
-  panel.position.set(0, 0.0225, 0.0205);
+  panel.position.set(0, 0.0225 * ESCALA_MUNDO, 0.0205 * ESCALA_MUNDO);
   g.add(panel);
 
   const canvas = document.createElement('canvas');
@@ -429,10 +440,10 @@ function crearFuente() {
   const ctx = canvas.getContext('2d');
   const tex = new THREE.CanvasTexture(canvas);
   const display = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.04, 0.012),
+    new THREE.PlaneGeometry(0.04 * ESCALA_MUNDO, 0.012 * ESCALA_MUNDO),
     new THREE.MeshBasicMaterial({ map: tex })
   );
-  display.position.set(0, 0.03, 0.0211);
+  display.position.set(0, 0.03 * ESCALA_MUNDO, 0.0211 * ESCALA_MUNDO);
   g.add(display);
 
   g.userData = { ctx, canvas, tex };
@@ -440,9 +451,9 @@ function crearFuente() {
 }
 
 const fuente = crearFuente();
-fuente.position.set(-0.12, 0, -0.08);
+fuente.position.copy(posMundo(-0.12, 0, -0.08));
 fuente.rotation.y = 0.35;
-mundo.add(fuente);
+scene.add(fuente);
 
 // ============================================================
 // TESLÁMETRO
@@ -450,18 +461,18 @@ mundo.add(fuente);
 function crearTeslametro() {
   const g = new THREE.Group();
   const cuerpo = new THREE.Mesh(
-    new THREE.BoxGeometry(0.05, 0.035, 0.04),
+    new THREE.BoxGeometry(0.05 * ESCALA_MUNDO, 0.035 * ESCALA_MUNDO, 0.04 * ESCALA_MUNDO),
     new THREE.MeshStandardMaterial({ color: 0x2a3548, metalness: 0.6, roughness: 0.4 })
   );
-  cuerpo.position.y = 0.0175;
+  cuerpo.position.y = 0.0175 * ESCALA_MUNDO;
   cuerpo.castShadow = true;
   g.add(cuerpo);
 
   const panel = new THREE.Mesh(
-    new THREE.BoxGeometry(0.046, 0.031, 0.001),
+    new THREE.BoxGeometry(0.046 * ESCALA_MUNDO, 0.031 * ESCALA_MUNDO, 0.001 * ESCALA_MUNDO),
     new THREE.MeshStandardMaterial({ color: 0x0a0e18 })
   );
-  panel.position.set(0, 0.0175, 0.0205);
+  panel.position.set(0, 0.0175 * ESCALA_MUNDO, 0.0205 * ESCALA_MUNDO);
   g.add(panel);
 
   const canvas = document.createElement('canvas');
@@ -469,10 +480,10 @@ function crearTeslametro() {
   const ctx = canvas.getContext('2d');
   const tex = new THREE.CanvasTexture(canvas);
   const display = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.04, 0.012),
+    new THREE.PlaneGeometry(0.04 * ESCALA_MUNDO, 0.012 * ESCALA_MUNDO),
     new THREE.MeshBasicMaterial({ map: tex })
   );
-  display.position.set(0, 0.023, 0.0211);
+  display.position.set(0, 0.023 * ESCALA_MUNDO, 0.0211 * ESCALA_MUNDO);
   g.add(display);
 
   g.userData = { ctx, canvas, tex };
@@ -480,9 +491,9 @@ function crearTeslametro() {
 }
 
 const teslametro = crearTeslametro();
-teslametro.position.set(0.38, 0, -0.08);
+teslametro.position.copy(posMundo(0.38, 0, -0.08));
 teslametro.rotation.y = -0.35;
-mundo.add(teslametro);
+scene.add(teslametro);
 
 // ============================================================
 // VARILLA PERPENDICULAR (eje Z)
@@ -490,124 +501,124 @@ mundo.add(teslametro);
 const varillaGroup = new THREE.Group();
 
 const varilla = new THREE.Mesh(
-  new THREE.CylinderGeometry(VARILLA_RADIO_CM/100, VARILLA_RADIO_CM/100, VARILLA_LARGO_CM/100, 16),
+  new THREE.CylinderGeometry(VARILLA_RADIO_CM/100 * ESCALA_MUNDO, VARILLA_RADIO_CM/100 * ESCALA_MUNDO, VARILLA_LARGO_CM/100 * ESCALA_MUNDO, 16),
   new THREE.MeshStandardMaterial({
     color: 0xc47a3a, metalness: 0.95, roughness: 0.15,
     emissive: 0x4a2a10, emissiveIntensity: 0.3
   })
 );
 varilla.rotation.x = Math.PI / 2;
-varilla.position.set(0, ALTURA_EJE_CM/100, 0);
+varilla.position.copy(posMundo(0, ALTURA_EJE_CM/100, 0));
 varilla.castShadow = true;
 varillaGroup.add(varilla);
 
 const haloVarilla = new THREE.Mesh(
-  new THREE.CylinderGeometry(0.005, 0.005, VARILLA_LARGO_CM/100, 16, 1, true),
+  new THREE.CylinderGeometry(0.005 * ESCALA_MUNDO, 0.005 * ESCALA_MUNDO, VARILLA_LARGO_CM/100 * ESCALA_MUNDO, 16, 1, true),
   new THREE.MeshBasicMaterial({
     color: 0xff8844, transparent: true, opacity: 0.0,
     side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false
   })
 );
 haloVarilla.rotation.x = Math.PI / 2;
-haloVarilla.position.set(0, ALTURA_EJE_CM/100, 0);
+haloVarilla.position.copy(posMundo(0, ALTURA_EJE_CM/100, 0));
 varillaGroup.add(haloVarilla);
 
 for (const z of [-VARILLA_LARGO_CM/2/100 - 0.005, VARILLA_LARGO_CM/2/100 + 0.005]) {
   const soporte = new THREE.Mesh(
-    new THREE.BoxGeometry(0.012, 0.012, 0.01),
+    new THREE.BoxGeometry(0.012 * ESCALA_MUNDO, 0.012 * ESCALA_MUNDO, 0.01 * ESCALA_MUNDO),
     new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.9 })
   );
-  soporte.position.set(0, ALTURA_EJE_CM/100, z);
+  soporte.position.copy(posMundo(0, ALTURA_EJE_CM/100, z));
   varillaGroup.add(soporte);
 
   const poste = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.0015, 0.0015, ALTURA_EJE_CM/100 - 0.006, 8),
+    new THREE.CylinderGeometry(0.0015 * ESCALA_MUNDO, 0.0015 * ESCALA_MUNDO, (ALTURA_EJE_CM/100 - 0.006) * ESCALA_MUNDO, 8),
     new THREE.MeshStandardMaterial({ color: 0x4a4a4a, metalness: 0.7, roughness: 0.4 })
   );
-  poste.position.set(0, (ALTURA_EJE_CM/100 - 0.006)/2 + 0.001, z);
+  poste.position.copy(posMundo(0, (ALTURA_EJE_CM/100 - 0.006)/2 + 0.001, z));
   varillaGroup.add(poste);
 }
 
-mundo.add(varillaGroup);
+scene.add(varillaGroup);
 
 // ============================================================
-// ESPIRA (plano YZ, eje en X)
+// ESPIRA
 // ============================================================
 const espiraGroup = new THREE.Group();
 
 const espira = new THREE.Mesh(
-  new THREE.TorusGeometry(ESPIRA_RADIO_CM/100, 0.0025, 16, 64),
+  new THREE.TorusGeometry(ESPIRA_RADIO_CM/100 * ESCALA_MUNDO, 0.0025 * ESCALA_MUNDO, 16, 64),
   new THREE.MeshStandardMaterial({
     color: 0xc47a3a, metalness: 0.95, roughness: 0.15,
     emissive: 0x4a2a10, emissiveIntensity: 0.3
   })
 );
 espira.rotation.y = Math.PI / 2;
-espira.position.set(0, ALTURA_EJE_CM/100, 0);
+espira.position.copy(posMundo(0, ALTURA_EJE_CM/100, 0));
 espira.castShadow = true;
 espiraGroup.add(espira);
 
 const haloEspira = new THREE.Mesh(
-  new THREE.TorusGeometry(ESPIRA_RADIO_CM/100, 0.0045, 16, 64),
+  new THREE.TorusGeometry(ESPIRA_RADIO_CM/100 * ESCALA_MUNDO, 0.0045 * ESCALA_MUNDO, 16, 64),
   new THREE.MeshBasicMaterial({
     color: 0xff8844, transparent: true, opacity: 0.0,
     blending: THREE.AdditiveBlending, depthWrite: false
   })
 );
 haloEspira.rotation.y = Math.PI / 2;
-haloEspira.position.set(0, ALTURA_EJE_CM/100, 0);
+haloEspira.position.copy(posMundo(0, ALTURA_EJE_CM/100, 0));
 espiraGroup.add(haloEspira);
 
 const posteEspira = new THREE.Mesh(
-  new THREE.CylinderGeometry(0.0015, 0.0015, ALTURA_EJE_CM/100 - ESPIRA_RADIO_CM/100 - 0.003, 8),
+  new THREE.CylinderGeometry(0.0015 * ESCALA_MUNDO, 0.0015 * ESCALA_MUNDO, (ALTURA_EJE_CM/100 - ESPIRA_RADIO_CM/100 - 0.003) * ESCALA_MUNDO, 8),
   new THREE.MeshStandardMaterial({ color: 0x4a4a4a, metalness: 0.7, roughness: 0.4 })
 );
-posteEspira.position.set(0, (ALTURA_EJE_CM/100 - ESPIRA_RADIO_CM/100 - 0.003)/2 + 0.001, 0);
+posteEspira.position.copy(posMundo(0, (ALTURA_EJE_CM/100 - ESPIRA_RADIO_CM/100 - 0.003)/2 + 0.001, 0));
 espiraGroup.add(posteEspira);
 
 espiraGroup.visible = false;
-mundo.add(espiraGroup);
+scene.add(espiraGroup);
 
 // ============================================================
-// SONDA HALL
+// SONDA
 // ============================================================
 const sondaGroup = new THREE.Group();
 
 const baseSonda = new THREE.Mesh(
-  new THREE.BoxGeometry(0.02, 0.007, 0.02),
+  new THREE.BoxGeometry(0.02 * ESCALA_MUNDO, 0.007 * ESCALA_MUNDO, 0.02 * ESCALA_MUNDO),
   new THREE.MeshStandardMaterial({ color: 0x4a5a6c, metalness: 0.7, roughness: 0.3 })
 );
-baseSonda.position.y = 0.0095;
+baseSonda.position.y = 0.0095 * ESCALA_MUNDO;
 baseSonda.castShadow = true;
 sondaGroup.add(baseSonda);
 
 const posteSonda = new THREE.Mesh(
-  new THREE.CylinderGeometry(0.0014, 0.0014, ALTURA_EJE_CM/100 - 0.011, 8),
+  new THREE.CylinderGeometry(0.0014 * ESCALA_MUNDO, 0.0014 * ESCALA_MUNDO, (ALTURA_EJE_CM/100 - 0.011) * ESCALA_MUNDO, 8),
   new THREE.MeshStandardMaterial({ color: 0x6a7a8c, metalness: 0.8, roughness: 0.3 })
 );
-posteSonda.position.y = (ALTURA_EJE_CM/100 - 0.011)/2 + 0.011;
+posteSonda.position.y = ((ALTURA_EJE_CM/100 - 0.011)/2 + 0.011) * ESCALA_MUNDO;
 posteSonda.castShadow = true;
 sondaGroup.add(posteSonda);
 
 const brazoSonda = new THREE.Mesh(
-  new THREE.BoxGeometry(0.016, 0.0025, 0.0025),
+  new THREE.BoxGeometry(0.016 * ESCALA_MUNDO, 0.0025 * ESCALA_MUNDO, 0.0025 * ESCALA_MUNDO),
   new THREE.MeshStandardMaterial({ color: 0x6a7a8c, metalness: 0.8, roughness: 0.3 })
 );
-brazoSonda.position.set(-0.008, ALTURA_EJE_CM/100, 0);
+brazoSonda.position.set(-0.008 * ESCALA_MUNDO, ALTURA_EJE_CM/100 * ESCALA_MUNDO, 0);
 brazoSonda.castShadow = true;
 sondaGroup.add(brazoSonda);
 
 const puntaSonda = new THREE.Mesh(
-  new THREE.SphereGeometry(0.0022, 12, 12),
+  new THREE.SphereGeometry(0.0022 * ESCALA_MUNDO, 12, 12),
   new THREE.MeshStandardMaterial({
     color: 0xff4a4a, emissive: 0xff4a4a, emissiveIntensity: 0.8,
     metalness: 0.5, roughness: 0.3
   })
 );
-puntaSonda.position.set(-0.016, ALTURA_EJE_CM/100, 0);
+puntaSonda.position.set(-0.016 * ESCALA_MUNDO, ALTURA_EJE_CM/100 * ESCALA_MUNDO, 0);
 sondaGroup.add(puntaSonda);
 
-mundo.add(sondaGroup);
+scene.add(sondaGroup);
 
 // ============================================================
 // FÍSICA
@@ -689,14 +700,14 @@ function smmToCm(mm) { return mm / 10; }
 const datosCapturados = [];
 
 // ============================================================
-// GRUPOS
+// GRUPOS (todos los efectos van a scene directamente)
 // ============================================================
 const zonaGroup = new THREE.Group();
 const vectoresGroup = new THREE.Group();
 const lineasGroup = new THREE.Group();
 const particulasGroup = new THREE.Group();
 const limiteGroup = new THREE.Group();
-mundo.add(zonaGroup, vectoresGroup, lineasGroup, particulasGroup, limiteGroup);
+scene.add(zonaGroup, vectoresGroup, lineasGroup, particulasGroup, limiteGroup);
 
 let zonaShells = [];
 let orbitalesPuntos = null;
@@ -719,11 +730,11 @@ function crearZonaInfluencia() {
   if (estado.elemento === 'axial') {
     for (let i = 0; i < numCapas; i++) {
       const frac = (i + 1) / numCapas;
-      const radio = (0.5 + frac * radioMax) / 100;
+      const radio = (0.5 + frac * radioMax) / 100 * ESCALA_MUNDO;
       const opacidad = (1 - frac) * 0.10;
       if (opacidad < 0.005) continue;
 
-      const geo = new THREE.CylinderGeometry(radio, radio, VARILLA_LARGO_CM * 1.1 / 100, 32, 1, true);
+      const geo = new THREE.CylinderGeometry(radio, radio, VARILLA_LARGO_CM * 1.1 / 100 * ESCALA_MUNDO, 32, 1, true);
       const mat = new THREE.MeshBasicMaterial({
         color: new THREE.Color().setHSL(0.55 - frac*0.15, 1.0, 0.5),
         transparent: true,
@@ -734,14 +745,14 @@ function crearZonaInfluencia() {
       });
       const shell = new THREE.Mesh(geo, mat);
       shell.rotation.x = Math.PI / 2;
-      shell.position.set(0, ALTURA_EJE_CM/100, 0);
+      shell.position.copy(posMundo(0, ALTURA_EJE_CM/100, 0));
       zonaGroup.add(shell);
       zonaShells.push({ mesh: shell, fase: i / numCapas });
     }
   } else {
     for (let i = 0; i < numCapas; i++) {
       const frac = (i + 1) / numCapas;
-      const radio = (0.5 + frac * radioMax) / 100;
+      const radio = (0.5 + frac * radioMax) / 100 * ESCALA_MUNDO;
       const opacidad = (1 - frac) * 0.10;
       if (opacidad < 0.005) continue;
 
@@ -755,44 +766,11 @@ function crearZonaInfluencia() {
         depthWrite: false
       });
       const shell = new THREE.Mesh(geo, mat);
-      shell.position.set(0, ALTURA_EJE_CM/100, 0);
+      shell.position.copy(posMundo(0, ALTURA_EJE_CM/100, 0));
       zonaGroup.add(shell);
       zonaShells.push({ mesh: shell, fase: i / numCapas });
     }
   }
-}
-
-// ============================================================
-// ANILLO DE LÍMITE
-// ============================================================
-function crearAnilloLimite() {
-  while (limiteGroup.children.length) {
-    const c = limiteGroup.children[0];
-    limiteGroup.remove(c);
-    if (c.geometry) c.geometry.dispose();
-  }
-  if (!estado.mostrarLimite) return;
-
-  const umbral = 0.01e-3;
-  let dLimiteCM = 1;
-  for (let d = 0.5; d < 40; d += 0.5) {
-    const p = new THREE.Vector3(d, ALTURA_EJE_CM, 0);
-    const B = calcularB(p, estado.segmentos, estado.I);
-    if (B.length() < umbral) { dLimiteCM = d; break; }
-  }
-
-  const linea = new THREE.Line(
-    new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(dLimiteCM/100, 0, 0),
-      new THREE.Vector3(dLimiteCM/100, ALTURA_EJE_CM/100 + 0.02, 0)
-    ]),
-    new THREE.LineDashedMaterial({ color: 0xffaa44, dashSize: 0.004, gapSize: 0.003 })
-  );
-  linea.computeLineDistances();
-  limiteGroup.add(linea);
-
-  const sprite = crearTexto((dLimiteCM * 10).toFixed(0) + ' mm', dLimiteCM + 1.5, ALTURA_EJE_CM + 2.5, 0, 1.0, '#ffaa44');
-  limiteGroup.add(sprite);
 }
 
 // ============================================================
@@ -848,10 +826,10 @@ function crearOrbitas() {
         for (let i = 0; i < PARTICULAS_POR_ORBITA; i++) {
           orbitalesData.push({
             tipo: 'z',
-            centro: new THREE.Vector3(0, ALTURA_EJE_CM, z).multiplyScalar(CM),
+            centro: posMundo(0, ALTURA_EJE_CM/100, z/100),
             u: new THREE.Vector3(1, 0, 0),
             v: new THREE.Vector3(0, 1, 0),
-            radio: radio * CM,
+            radio: radio * CM * ESCALA_MUNDO,
             angulo: (i / PARTICULAS_POR_ORBITA) * Math.PI * 2,
             velAngular: velAngular,
             direccion: 1,
@@ -865,11 +843,12 @@ function crearOrbitas() {
     const N_ALAMBRE = 24;
     for (let k = 0; k < N_ALAMBRE; k++) {
       const theta = (k / N_ALAMBRE) * Math.PI * 2;
-      const centroOrbita = new THREE.Vector3(
+      const centroOrbitaCM = new THREE.Vector3(
         0,
         ALTURA_EJE_CM + ESPIRA_RADIO_CM * Math.cos(theta),
         ESPIRA_RADIO_CM * Math.sin(theta)
-      ).multiplyScalar(CM);
+      );
+      const centroOrbita = posMundo(0, centroOrbitaCM.y/100, centroOrbitaCM.z/100);
       const tangente = tangenteAlambreEspira(theta);
       const { u, v } = basePerpendicular(tangente);
 
@@ -878,9 +857,9 @@ function crearOrbitas() {
         if (alpha < 0.04) return;
 
         const pRef = new THREE.Vector3(
-          centroOrbita.x / CM + u.x * radio,
-          centroOrbita.y / CM + u.y * radio,
-          centroOrbita.z / CM + u.z * radio
+          centroOrbitaCM.x + u.x * radio,
+          centroOrbitaCM.y + u.y * radio,
+          centroOrbitaCM.z + u.z * radio
         );
         const B = calcularB(pRef, estado.segmentos, estado.I);
         const mag = B.length();
@@ -892,7 +871,7 @@ function crearOrbitas() {
             centro: centroOrbita,
             u: u,
             v: v,
-            radio: radio * CM,
+            radio: radio * CM * ESCALA_MUNDO,
             angulo: (i / PARTICULAS_POR_ORBITA) * Math.PI * 2,
             velAngular: velAngular,
             direccion: 1,
@@ -933,7 +912,7 @@ function crearOrbitas() {
 
   const mat = new THREE.ShaderMaterial({
     uniforms: {
-      uSize: { value: 0.55 / 100 },
+      uSize: { value: 0.55 / 100 * ESCALA_MUNDO },
       uPixelRatio: { value: renderer.getPixelRatio() }
     },
     vertexShader: `
@@ -1038,9 +1017,10 @@ function crearGeometriaLinea(puntos) {
 
   for (let i = 0; i < N; i++) {
     const p = puntos[i];
-    posiciones[i*3]     = p.x * CM;
-    posiciones[i*3 + 1] = p.y * CM;
-    posiciones[i*3 + 2] = p.z * CM;
+    const pWorld = posMundo(p.x * CM, p.y * CM, p.z * CM);
+    posiciones[i*3]     = pWorld.x;
+    posiciones[i*3 + 1] = pWorld.y;
+    posiciones[i*3 + 2] = pWorld.z;
 
     const distRadial = distanciaRadial(p);
     const factorRadial = Math.exp(-distRadial * K_DECAIMIENTO);
@@ -1195,7 +1175,7 @@ function regenerarParticulas() {
 
   const mat = new THREE.ShaderMaterial({
     uniforms: {
-      uSize: { value: 0.45 / 100 },
+      uSize: { value: 0.45 / 100 * ESCALA_MUNDO },
       uPixelRatio: { value: renderer.getPixelRatio() }
     },
     vertexShader: `
@@ -1244,7 +1224,7 @@ function animarParticulas(dt) {
     const idx0 = Math.min(Math.floor(info.t * (pts.length - 1)), pts.length - 2);
     const pAct = pts[idx0];
 
-    const pActCM = pAct.clone().divideScalar(CM);
+    const pActCM = posMundoInverso(pAct);
     const distRadial = distanciaRadial(pActCM);
     const visibilidad = Math.exp(-distRadial * K_DECAIMIENTO);
     const velFactor = 1.0 / (1.0 + distRadial * 0.4);
@@ -1267,6 +1247,48 @@ function animarParticulas(dt) {
 
   particulasPuntos.geometry.attributes.position.needsUpdate = true;
   particulasPuntos.geometry.attributes.alpha.needsUpdate = true;
+}
+
+// Inverso de posMundo: de coordenadas del mundo a coordenadas internas (cm)
+function posMundoInverso(p) {
+  return new THREE.Vector3(
+    (p.x - OFFSET_X) / ESCALA_MUNDO * 100,
+    (p.y - OFFSET_Y) / ESCALA_MUNDO * 100,
+    (p.z - OFFSET_Z) / ESCALA_MUNDO * 100
+  );
+}
+
+// ============================================================
+// ANILLO DE LÍMITE MEDIBLE
+// ============================================================
+function crearAnilloLimite() {
+  while (limiteGroup.children.length) {
+    const c = limiteGroup.children[0];
+    limiteGroup.remove(c);
+    if (c.geometry) c.geometry.dispose();
+  }
+  if (!estado.mostrarLimite) return;
+
+  const umbral = 0.01e-3;
+  let dLimiteCM = 1;
+  for (let d = 0.5; d < 40; d += 0.5) {
+    const p = new THREE.Vector3(d, ALTURA_EJE_CM, 0);
+    const B = calcularB(p, estado.segmentos, estado.I);
+    if (B.length() < umbral) { dLimiteCM = d; break; }
+  }
+
+  const linea = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([
+      posMundo(dLimiteCM/100, 0, 0),
+      posMundo(dLimiteCM/100, ALTURA_EJE_CM/100 + 0.02, 0)
+    ]),
+    new THREE.LineDashedMaterial({ color: 0xffaa44, dashSize: 0.004, dashSize: 0.02 * ESCALA_MUNDO, gapSize: 0.015 * ESCALA_MUNDO })
+  );
+  linea.computeLineDistances();
+  limiteGroup.add(linea);
+
+  const sprite = crearTexto((dLimiteCM * 10).toFixed(0) + ' mm', dLimiteCM + 1.5, ALTURA_EJE_CM + 2.5, 0, 1.0, '#ffaa44');
+  limiteGroup.add(sprite);
 }
 
 // ============================================================
@@ -1317,7 +1339,7 @@ function actualizarDisplay(objeto, texto) {
 
 function actualizarPosicionSonda() {
   const s_cm = smmToCm(estado.s_mm);
-  sondaGroup.position.set(s_cm / 100, 0, 0);
+  sondaGroup.position.copy(posMundo(s_cm / 100, 0, 0));
 }
 
 // ============================================================
@@ -1402,16 +1424,22 @@ function actualizarAudio() {
 const vrBtn = VRButton.createButton(renderer);
 document.getElementById('VRButton-container').appendChild(vrBtn);
 
+// ============================================================
+// RIG XR
+// ============================================================
+// El rig está en (0, 0, 0). El headset añade su altura real encima.
 const xrRig = new THREE.Group();
+xrRig.position.set(0, 0, 0);
 scene.add(xrRig);
 
+// Controllers
 const controllerGrip0 = renderer.xr.getControllerGrip(0);
 const controllerGrip1 = renderer.xr.getControllerGrip(1);
 const controllerModelFactory = new XRControllerModelFactory();
 controllerGrip0.add(controllerModelFactory.createControllerModel(controllerGrip0));
 controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
-scene.add(controllerGrip0);
-scene.add(controllerGrip1);
+xrRig.add(controllerGrip0);
+xrRig.add(controllerGrip1);
 
 function crearRayo() {
   const geo = new THREE.BufferGeometry().setFromPoints([
@@ -1426,39 +1454,36 @@ function crearRayo() {
 
 const rayo0 = crearRayo();
 const rayo1 = crearRayo();
-renderer.xr.getController(0).add(rayo0);
-renderer.xr.getController(1).add(rayo1);
-scene.add(renderer.xr.getController(0));
-scene.add(renderer.xr.getController(1));
-
-const controlesXR = {
-  thumbstickIzqX: 0,
-  thumbstickDerY: 0,
-  botonA_Ultimo: false,
-  botonB_Ultimo: false
-};
+const ctrl0 = renderer.xr.getController(0);
+const ctrl1 = renderer.xr.getController(1);
+ctrl0.add(rayo0);
+ctrl1.add(rayo1);
+xrRig.add(ctrl0);
+xrRig.add(ctrl1);
 
 // ============================================================
-// PANEL 3D FLOTANTE PARA VR
+// PANEL 3D FLOTANTE — ES HIJO DEL RIG XR
 // ============================================================
 const panelVRGroup = new THREE.Group();
-panelVRGroup.position.set(0, 1.5, 0.3);
+// 50 cm al frente (eje -Z en VR) y 20 cm abajo de la línea de visión
+panelVRGroup.position.set(0, -0.20, -0.55);
 panelVRGroup.visible = false;
-scene.add(panelVRGroup);
+xrRig.add(panelVRGroup);
 
 const panelFondo = new THREE.Mesh(
-  new THREE.PlaneGeometry(1.1, 0.5),
+  new THREE.PlaneGeometry(1.0, 0.45),
   new THREE.MeshBasicMaterial({
     color: 0x0a1428,
     transparent: true,
-    opacity: 0.9,
-    side: THREE.DoubleSide
+    opacity: 0.92,
+    side: THREE.DoubleSide,
+    depthTest: false
   })
 );
 panelVRGroup.add(panelFondo);
 
 const panelBorde = new THREE.LineSegments(
-  new THREE.EdgesGeometry(new THREE.PlaneGeometry(1.1, 0.5)),
+  new THREE.EdgesGeometry(new THREE.PlaneGeometry(1.0, 0.45)),
   new THREE.LineBasicMaterial({ color: 0x22d3ee })
 );
 panelVRGroup.add(panelBorde);
@@ -1471,19 +1496,19 @@ function crearBotonVR(texto, x, y, w, h, color, onClick) {
   ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
   ctx.fillRect(0, 0, 512, 256);
   ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 8;
-  ctx.strokeRect(6, 6, 500, 244);
+  ctx.lineWidth = 10;
+  ctx.strokeRect(8, 8, 496, 240);
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 64px Arial';
+  ctx.font = 'bold 68px Arial';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(texto, 256, 128);
 
   const tex = new THREE.CanvasTexture(canvas);
-  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
+  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, depthTest: false });
   const geo = new THREE.PlaneGeometry(w, h);
   const btn = new THREE.Mesh(geo, mat);
-  btn.position.set(x, y, 0.001);
+  btn.position.set(x, y, 0.002);
   btn.userData.onClick = onClick;
   panelVRGroup.add(btn);
   return btn;
@@ -1505,16 +1530,16 @@ function crearTextoPanel(texto, x, y, size, color) {
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
     map: tex, transparent: true, depthTest: false
   }));
-  sprite.position.set(x, y, 0.002);
+  sprite.position.set(x, y, 0.003);
   sprite.scale.set(size, size * 0.125, 1);
   panelVRGroup.add(sprite);
   return sprite;
 }
 
-crearTextoPanel('⚡ LEY DE BIOT-SAVART', 0, 0.20, 0.65, '#22d3ee');
+crearTextoPanel('⚡ LEY DE BIOT-SAVART', 0, 0.18, 0.62, '#22d3ee');
 
-crearTextoPanel('Corriente', -0.35, 0.11, 0.28, '#8fa3c0');
-crearBotonVR('−', -0.42, 0.02, 0.13, 0.10, 0xdc2626, () => {
+crearTextoPanel('Corriente', -0.32, 0.10, 0.26, '#8fa3c0');
+crearBotonVR('−', -0.38, 0.02, 0.12, 0.09, 0xdc2626, () => {
   estado.I = Math.max(0, estado.I - 2);
   document.getElementById('corriente').value = estado.I;
   document.getElementById('valI').textContent = estado.I.toFixed(1) + ' A';
@@ -1523,7 +1548,7 @@ crearBotonVR('−', -0.42, 0.02, 0.13, 0.10, 0xdc2626, () => {
   actualizarAudio();
   actualizarPanelVR();
 });
-crearBotonVR('+', -0.28, 0.02, 0.13, 0.10, 0x059669, () => {
+crearBotonVR('+', -0.25, 0.02, 0.12, 0.09, 0x059669, () => {
   estado.I = Math.min(100, estado.I + 2);
   document.getElementById('corriente').value = estado.I;
   document.getElementById('valI').textContent = estado.I.toFixed(1) + ' A';
@@ -1533,8 +1558,8 @@ crearBotonVR('+', -0.28, 0.02, 0.13, 0.10, 0x059669, () => {
   actualizarPanelVR();
 });
 
-crearTextoPanel('Posición', 0.35, 0.11, 0.28, '#8fa3c0');
-crearBotonVR('−', 0.28, 0.02, 0.13, 0.10, 0xdc2626, () => {
+crearTextoPanel('Posición', 0.32, 0.10, 0.26, '#8fa3c0');
+crearBotonVR('−', 0.26, 0.02, 0.12, 0.09, 0xdc2626, () => {
   estado.s_mm = Math.max(5, estado.s_mm - 10);
   document.getElementById('posicion').value = estado.s_mm;
   document.getElementById('valS').textContent = estado.s_mm.toFixed(0) + ' mm';
@@ -1543,7 +1568,7 @@ crearBotonVR('−', 0.28, 0.02, 0.13, 0.10, 0xdc2626, () => {
   actualizarLectura();
   actualizarPanelVR();
 });
-crearBotonVR('+', 0.42, 0.02, 0.13, 0.10, 0x059669, () => {
+crearBotonVR('+', 0.38, 0.02, 0.12, 0.09, 0x059669, () => {
   estado.s_mm = Math.min(300, estado.s_mm + 10);
   document.getElementById('posicion').value = estado.s_mm;
   document.getElementById('valS').textContent = estado.s_mm.toFixed(0) + ' mm';
@@ -1553,18 +1578,18 @@ crearBotonVR('+', 0.42, 0.02, 0.13, 0.10, 0x059669, () => {
   actualizarPanelVR();
 });
 
-crearBotonVR('VARILLA ⟷ ESPIRA', 0, -0.09, 0.55, 0.09, 0x2563eb, () => {
+crearBotonVR('VARILLA ⟷ ESPIRA', 0, -0.08, 0.5, 0.08, 0x2563eb, () => {
   cambiarElemento();
   actualizarPanelVR();
 });
 
-crearBotonVR('GUARDAR MEDICIÓN', 0, -0.20, 0.55, 0.09, 0x059669, () => {
+crearBotonVR('GUARDAR MEDICIÓN', 0, -0.18, 0.5, 0.08, 0x059669, () => {
   const B = actualizarLectura();
   agregarFila(estado.elemento, estado.I, estado.s_mm, B);
   mostrarToast('✅ Medición guardada');
 });
 
-const displayLecturaVR = crearTextoPanel('B: 0.0000 mT', 0, -0.32, 0.6, '#4da3ff');
+const displayLecturaVR = crearTextoPanel('B: 0.0000 mT', 0, -0.29, 0.55, '#4da3ff');
 
 function actualizarPanelVR() {
   const B = actualizarLectura();
@@ -1594,9 +1619,12 @@ function manejarClicRayo(controller) {
 
   const intersects = raycaster.intersectObjects(panelVRGroup.children, false);
   if (intersects.length > 0) {
-    const obj = intersects[0].object;
-    if (obj.userData.onClick) {
-      obj.userData.onClick();
+    // Buscar el primer objeto con onClick
+    for (const hit of intersects) {
+      if (hit.object.userData.onClick) {
+        hit.object.userData.onClick();
+        break;
+      }
     }
   }
 }
@@ -1605,7 +1633,7 @@ function manejarClicRayo(controller) {
 // SESIÓN XR
 // ============================================================
 renderer.xr.addEventListener('sessionstart', () => {
-  xrRig.position.set(0, 1.6, 0.6);
+  xrRig.position.set(0, 0, 0);
   controls.enabled = false;
   document.getElementById('panel').style.display = 'none';
   document.getElementById('hud').style.display = 'none';
@@ -1656,7 +1684,6 @@ function procesarControlesXR() {
 
     if (src.handedness === 'left') {
       const x = gp.axes[2] || 0;
-      controlesXR.thumbstickIzqX = x;
       if (Math.abs(x) > 0.15) {
         estado.s_mm = Math.max(5, Math.min(300, estado.s_mm + x * 300 * 0.016));
         document.getElementById('posicion').value = estado.s_mm;
@@ -1665,24 +1692,10 @@ function procesarControlesXR() {
         actualizarPosicionSonda();
         actualizarLectura();
       }
-
-      const botonX = gp.buttons[4] && gp.buttons[4].pressed;
-      if (botonX && !controlesXR.botonA_Ultimo) {
-        cambiarElemento();
-        actualizarPanelVR();
-      }
-      controlesXR.botonA_Ultimo = botonX;
-
-      const botonY = gp.buttons[5] && gp.buttons[5].pressed;
-      if (botonY && !controlesXR.botonB_Ultimo) {
-        toggleSonido();
-      }
-      controlesXR.botonB_Ultimo = botonY;
     }
 
     if (src.handedness === 'right') {
       const y = gp.axes[3] || 0;
-      controlesXR.thumbstickDerY = y;
       if (Math.abs(y) > 0.15) {
         estado.I = Math.max(0, Math.min(100, estado.I - y * 50 * 0.016));
         document.getElementById('corriente').value = estado.I;
