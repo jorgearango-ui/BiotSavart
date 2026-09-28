@@ -129,7 +129,7 @@
   <div class="seccion-titulo">Sonda y medición</div>
 
   <label>Posición de la sonda <span class="valor" id="valS">100 mm</span></label>
-  <input type="range" id="posicion" min="5" max="300" value="100" step="1">
+  <input type="range" id="posicion" min="0" max="300" value="100" step="1">
 
   <div class="leyenda">
     <span><i style="background:#10b981"></i>0–50 mm útil</span>
@@ -577,7 +577,15 @@ scene.add(espiraGroup);
 
 // ============================================================
 // SONDA  (la esfera roja = punto de medición)
+//
+// Geometría local del grupo:
+//   - La base del carro está en el ORIGEN local del grupo (0,0,0).
+//   - El brazo y la esfera roja apuntan hacia +X (hacia el elemento).
+//   - La esfera roja está a PUNTA_OFFSET_LOCAL del origen del grupo.
 // ============================================================
+const PUNTA_OFFSET_M = 0.016 * ESCALA_MUNDO;   // offset en metros de mundo (+X)
+const PUNTA_ALTURA_M = ALTURA_EJE_CM/100 * ESCALA_MUNDO;
+
 const sondaGroup = new THREE.Group();
 
 const baseSonda = new THREE.Mesh(
@@ -600,12 +608,12 @@ const brazoSonda = new THREE.Mesh(
   new THREE.BoxGeometry(0.016 * ESCALA_MUNDO, 0.0025 * ESCALA_MUNDO, 0.0025 * ESCALA_MUNDO),
   new THREE.MeshStandardMaterial({ color: 0x6a7a8c, metalness: 0.8, roughness: 0.3 })
 );
-brazoSonda.position.set(-0.008 * ESCALA_MUNDO, ALTURA_EJE_CM/100 * ESCALA_MUNDO, 0);
+brazoSonda.position.set(PUNTA_OFFSET_M / 2, PUNTA_ALTURA_M, 0);
 brazoSonda.castShadow = true;
 sondaGroup.add(brazoSonda);
 
-// La esfera roja = sensor (punto de medición). Su posición LOCAL dentro del grupo:
-const PUNTA_LOCAL = new THREE.Vector3(-0.016 * ESCALA_MUNDO, ALTURA_EJE_CM/100 * ESCALA_MUNDO, 0);
+// La esfera roja = sensor (punto de medición). Apunta hacia +X (hacia el elemento)
+const PUNTA_LOCAL = new THREE.Vector3(PUNTA_OFFSET_M, PUNTA_ALTURA_M, 0);
 const puntaSonda = new THREE.Mesh(
   new THREE.SphereGeometry(0.0022 * ESCALA_MUNDO, 12, 12),
   new THREE.MeshStandardMaterial({
@@ -658,7 +666,7 @@ function calcularB(puntoCM, segmentos, I) {
     const centroM = s.centro.clone().multiplyScalar(CM);
     const R = new THREE.Vector3().subVectors(pM, centroM);
     const r2 = R.lengthSq();
-    if (r2 < 1e-8) continue;
+    if (r2 < 1e-10) continue;
     const r = Math.sqrt(r2);
     const dB = new THREE.Vector3()
       .crossVectors(s.dl, R)
@@ -1374,13 +1382,22 @@ function actualizarDisplay(objeto, texto) {
   objeto.userData.tex.needsUpdate = true;
 }
 
-// ✅ VERSIÓN SIMPLE Y CORRECTA: la sonda se posiciona tal cual, sin compensar
-// el offset del carro. La lectura usa getWorldPosition() de la esfera roja
-// así que SIEMPRE es físicamente correcta. La diferencia entre "s" mostrado
-// y la posición real de la esfera es de ~7 mm, despreciable.
+// ============================================================
+// POSICIÓN DE LA SONDA
+//
+// La idea física:  "s" = distancia desde el elemento (varilla/espira)
+// hasta la ESFERA ROJA (punto de medición).
+//
+// La esfera roja está a PUNTA_OFFSET_M del origen del grupo hacia +X.
+// Por lo tanto, el origen del grupo debe colocarse en (s - PUNTA_OFFSET_M).
+//
+//   s = 0  ->  esfera roja en x = 0 (tocando la varilla / centro de espira)
+//   s > 0  ->  esfera roja a x = s (alejándose hacia +X)
+// ============================================================
 function actualizarPosicionSonda() {
-  const s_cm = smmToCm(estado.s_mm);
-  sondaGroup.position.copy(posMundo(s_cm / 100, 0, 0));
+  const s_m = estado.s_mm / 1000;             // mm -> metros de mundo
+  const xGrupoM = s_m - PUNTA_OFFSET_M;        // compensar offset de la esfera
+  sondaGroup.position.copy(posMundo(xGrupoM / ESCALA_MUNDO, 0, 0));
 }
 
 // ============================================================
@@ -1939,7 +1956,7 @@ const sliderI_VR = crearSliderVR(-0.30, 0.50, 1.7, estado.I, 0, 100, 0.5, 0x4da3
   actualizarAudio();
 }, 'Corriente eléctrica  I', 'A');
 
-const sliderS_VR = crearSliderVR(-0.30, 0.14, 1.7, estado.s_mm, 5, 300, 1, 0x10b981, (v) => {
+const sliderS_VR = crearSliderVR(-0.30, 0.14, 1.7, estado.s_mm, 0, 300, 1, 0x10b981, (v) => {
   estado.s_mm = v;
   document.getElementById('posicion').value = v;
   document.getElementById('valS').textContent = v.toFixed(0) + ' mm';
@@ -2217,7 +2234,7 @@ function procesarControlesXR() {
     if (src.handedness === 'left') {
       const x = gp.axes[2] !== undefined ? gp.axes[2] : gp.axes[0];
       if (Math.abs(x) > 0.15) {
-        estado.s_mm = Math.max(5, Math.min(300, estado.s_mm + x * 300 * 0.016));
+        estado.s_mm = Math.max(0, Math.min(300, estado.s_mm + x * 300 * 0.016));
         document.getElementById('posicion').value = estado.s_mm;
         document.getElementById('valS').textContent = estado.s_mm.toFixed(0) + ' mm';
         document.getElementById('hudS').textContent = estado.s_mm.toFixed(1);
