@@ -576,7 +576,7 @@ espiraGroup.visible = false;
 scene.add(espiraGroup);
 
 // ============================================================
-// SONDA
+// SONDA  (su punta = esfera roja es el punto de medición)
 // ============================================================
 const sondaGroup = new THREE.Group();
 
@@ -604,6 +604,7 @@ brazoSonda.position.set(-0.008 * ESCALA_MUNDO, ALTURA_EJE_CM/100 * ESCALA_MUNDO,
 brazoSonda.castShadow = true;
 sondaGroup.add(brazoSonda);
 
+// La esfera roja = sensor del teslámetro (punto de medición)
 const puntaSonda = new THREE.Mesh(
   new THREE.SphereGeometry(0.0022 * ESCALA_MUNDO, 12, 12),
   new THREE.MeshStandardMaterial({
@@ -611,7 +612,9 @@ const puntaSonda = new THREE.Mesh(
     metalness: 0.5, roughness: 0.3
   })
 );
-puntaSonda.position.set(-0.016 * ESCALA_MUNDO, ALTURA_EJE_CM/100 * ESCALA_MUNDO, 0);
+// Posición LOCAL de la esfera roja dentro del grupo de la sonda
+const PUNTA_LOCAL = new THREE.Vector3(-0.016 * ESCALA_MUNDO, ALTURA_EJE_CM/100 * ESCALA_MUNDO, 0);
+puntaSonda.position.copy(PUNTA_LOCAL);
 sondaGroup.add(puntaSonda);
 
 scene.add(sondaGroup);
@@ -812,7 +815,6 @@ function crearOrbitas() {
   const PARTICULAS_POR_ORBITA = 20;
 
   if (estado.elemento === 'axial') {
-    // 10 anillos de partículas orbitando alrededor de la varilla
     const N_ANILLOS_VARILLA = 10;
     const Z_MIN = -5;
     const Z_MAX = 5;
@@ -1073,9 +1075,6 @@ function crearMaterialLinea() {
   });
 }
 
-// ==================== CAMBIO CLAVE ====================
-// La varilla ahora genera 10 grupos de líneas de campo a lo
-// largo del eje Z (antes eran solo 5).
 function crearLineas() {
   while (lineasGroup.children.length) {
     const c = lineasGroup.children[0];
@@ -1087,8 +1086,6 @@ function crearLineas() {
   const semillas = [];
   if (estado.elemento === 'axial') {
     const N = 12;
-    // Antes: [-4,-2,0,2,4]  →  5 valores
-    // Ahora: 10 valores uniformemente distribuidos entre -5 y 5
     const N_LINEAS_Z = 10;
     const Z_MIN = -5, Z_MAX = 5;
     const valoresZ = [];
@@ -1303,26 +1300,38 @@ function crearAnilloLimite() {
 }
 
 // ============================================================
-// CÁLCULO DE B EN POSICIÓN DEL TESLÁMETRO
+// CÁLCULO DE B  —  AHORA USA LA PUNTA (esfera roja) DE LA SONDA
 // ============================================================
-function teslametroPosicionLogica() {
-  const pMundo = new THREE.Vector3();
-  teslametroGroup.getWorldPosition(pMundo);
-  const x_cm = (pMundo.x - OFFSET_X) / ESCALA_MUNDO * 100;
-  const y_cm = (pMundo.y - OFFSET_Y) / ESCALA_MUNDO * 100;
-  const z_cm = (pMundo.z - OFFSET_Z) / ESCALA_MUNDO * 100;
+// Devuelve la posición lógica (cm, relativa al eje del alambre)
+// del PUNTO DE MEDICIÓN:
+//   - Si el teslámetro está agarrado por el mando → usa la esfera roja del mando
+//   - Si está en el carril → usa la esfera roja de la sonda del carril
+function puntoMedicionLogica() {
+  const puntaMundo = new THREE.Vector3();
+
+  if (estado.teslametroAgarrado) {
+    // La esfera roja del teslámetro agarrado es la propia esfera del teslametro (displayTesla)
+    // La ubicamos con getWorldPosition del grupo y le sumamos el offset local de la esfera
+    // El offset local es (0, 0.023*ESCALA_MUNDO, 0.0211*ESCALA_MUNDO) aproximadamente
+    const offsetLocal = new THREE.Vector3(0, 0.023 * ESCALA_MUNDO, 0.0211 * ESCALA_MUNDO);
+    const offsetMundo = offsetLocal.clone().applyQuaternion(teslametroGroup.quaternion);
+    teslametroGroup.getWorldPosition(puntaMundo);
+    puntaMundo.add(offsetMundo);
+  } else {
+    // La esfera roja de la sonda del carril (puntaSonda) está en PUNTA_LOCAL dentro de sondaGroup
+    puntaSonda.getWorldPosition(puntaMundo);
+  }
+
+  // Convertir de coordenadas mundo (metros) a coordenadas lógicas (cm)
+  const x_cm = (puntaMundo.x - OFFSET_X) / ESCALA_MUNDO * 100;
+  const y_cm = (puntaMundo.y - OFFSET_Y) / ESCALA_MUNDO * 100;
+  const z_cm = (puntaMundo.z - OFFSET_Z) / ESCALA_MUNDO * 100;
   return new THREE.Vector3(x_cm, y_cm, z_cm);
 }
 
 function calcularB_Actual() {
-  if (estado.teslametroAgarrado) {
-    const punto = teslametroPosicionLogica();
-    return calcularB(punto, estado.segmentos, estado.I).length() * 1000;
-  } else {
-    const s_cm = smmToCm(estado.s_mm);
-    const punto = new THREE.Vector3(s_cm, ALTURA_EJE_CM, 0);
-    return calcularB(punto, estado.segmentos, estado.I).length() * 1000;
-  }
+  const punto = puntoMedicionLogica();
+  return calcularB(punto, estado.segmentos, estado.I).length() * 1000;
 }
 
 // ============================================================
@@ -1376,8 +1385,19 @@ function actualizarDisplay(objeto, texto) {
 }
 
 function actualizarPosicionSonda() {
+  // La sonda se mueve en X a lo largo del carril.
+  // La posición lógica "s" se refiere a la posición de la PUNTA (esfera roja)
+  // de la sonda respecto al origen (centro del elemento).
+  //
+  // La punta está en sondaGroup.position + PUNTA_LOCAL (rotado por grupo).
+  // Para que la punta quede exactamente en s_cm, compensamos el offset local:
+  //    sondaGroup.x = posMundo(s_cm) - PUNTA_LOCAL_world
+  //
+  // Como el grupo no está rotado, PUNTA_LOCAL_world = PUNTA_LOCAL.
   const s_cm = smmToCm(estado.s_mm);
-  sondaGroup.position.copy(posMundo(s_cm / 100, 0, 0));
+  const puntoPunta = posMundo(s_cm / 100, 0, 0); // posición deseada de la punta
+  const posBase = puntoPunta.clone().sub(PUNTA_LOCAL);
+  sondaGroup.position.copy(posBase);
 }
 
 // ============================================================
@@ -1711,7 +1731,7 @@ const laboratorio = crearLaboratorio();
 scene.add(laboratorio);
 
 // ============================================================
-// PANEL VR — TABLERO FIJO (con textos MUY reducidos)
+// PANEL VR — TABLERO FIJO
 // ============================================================
 const panelVRGroup = new THREE.Group();
 panelVRGroup.position.set(0, 1.75, -1.9);
@@ -1767,8 +1787,6 @@ function crearPlanoTexto(ancho, alto, dibujar, posZ) {
   return mesh;
 }
 
-// Texto de etiqueta. Ahora `size` es el ancho en metros del plano.
-// Antes era 0.8 → ahora usamos 0.5 para las etiquetas y 0.3 para los valores.
 function crearTextoVR(texto, x, y, size, color, tamanoFuente) {
   const fuente = tamanoFuente || 90;
   const alto = size * 0.25;
@@ -1873,7 +1891,6 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
   grupo.position.set(x, y, PANEL_Z);
   grupo.userData.esSlider = true;
 
-  // Etiqueta — ancho 0.5 m (muy reducido)
   const etiquetaPlano = crearTextoVR(etiqueta, x, y + 0.09, 0.5, '#8fa3c0', 90);
 
   const pista = new THREE.Mesh(
@@ -1897,7 +1914,6 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
   perilla.userData.esPerilla = true;
   grupo.add(perilla);
 
-  // Valor — ancho 0.3 m (muy reducido)
   const valorPlano = crearTextoVR('0', x + w / 2 + 0.22, y, 0.3, '#4da3ff', 90);
 
   grupo.userData.min = min;
@@ -1929,10 +1945,6 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
   return grupo;
 }
 
-// ============================================================
-// DISTRIBUCIÓN DEL TABLERO (con textos muy pequeños)
-// ============================================================
-// Título — ancho 0.7 m (antes era 1.0)
 crearTextoVR('⚡ LEY DE BIOT-SAVART', 0, PANEL_ALTO / 2 - 0.11, 0.7, '#22d3ee', 120);
 
 const sliderI_VR = crearSliderVR(-0.30, 0.50, 1.7, estado.I, 0, 100, 0.5, 0x4da3ff, (v) => {
@@ -2029,7 +2041,6 @@ crearBotonVR('🔄 RESET', 0.10, -0.90, 0.50, 0.085, 0x0891b2, () => {
   mostrarToast('🔄 Reset');
 }, 100);
 
-// Display lectura VR — ancho 0.6 m (antes era 1.0)
 const displayLecturaVR = crearTextoVR('B = 0.0000 mT   [VARILLA]', 0, -1.04, 0.6, '#4da3ff', 100);
 
 function actualizarPanelVR() {
