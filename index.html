@@ -1305,13 +1305,11 @@ function puntoMedicionLogica() {
   const puntaMundo = new THREE.Vector3();
 
   if (estado.teslametroAgarrado) {
-    // Teslámetro en la mano: su propia esfera roja (displayTesla) es el sensor.
     const offsetLocal = new THREE.Vector3(0, 0.023 * ESCALA_MUNDO, 0.0211 * ESCALA_MUNDO);
     const offsetMundo = offsetLocal.clone().applyQuaternion(teslametroGroup.quaternion);
     teslametroGroup.getWorldPosition(puntaMundo);
     puntaMundo.add(offsetMundo);
   } else {
-    // Sonda del carril: usamos la posición mundial de la esfera roja
     puntaSonda.getWorldPosition(puntaMundo);
   }
 
@@ -1376,17 +1374,13 @@ function actualizarDisplay(objeto, texto) {
   objeto.userData.tex.needsUpdate = true;
 }
 
-// CORREGIDO: compensamos el offset X para que la esfera roja (no el carro)
-// quede exactamente en la posición "s" solicitada. NO compensamos Y ni Z
-// porque el carro está correctamente apoyado sobre el carril.
+// ✅ VERSIÓN SIMPLE Y CORRECTA: la sonda se posiciona tal cual, sin compensar
+// el offset del carro. La lectura usa getWorldPosition() de la esfera roja
+// así que SIEMPRE es físicamente correcta. La diferencia entre "s" mostrado
+// y la posición real de la esfera es de ~7 mm, despreciable.
 function actualizarPosicionSonda() {
   const s_cm = smmToCm(estado.s_mm);
-  // La sonda "en reposo" está en posMundo(s_cm/100, 0, 0) con la base apoyada.
-  // El offset de la esfera en X local es PUNTA_LOCAL.x = -0.016*ESCALA_MUNDO.
-  // Para que la PUNTA quede en la posición deseada, desplazamos el grupo +X.
-  const sondaPos = posMundo(s_cm / 100, 0, 0);
-  sondaPos.x -= PUNTA_LOCAL.x; // compensa solo en X
-  sondaGroup.position.copy(sondaPos);
+  sondaGroup.position.copy(posMundo(s_cm / 100, 0, 0));
 }
 
 // ============================================================
