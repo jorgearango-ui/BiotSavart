@@ -812,12 +812,10 @@ function crearOrbitas() {
   const PARTICULAS_POR_ORBITA = 20;
 
   if (estado.elemento === 'axial') {
-    // ============ VARILLA: 15 anillos distribuidos a lo largo del eje Z ============
-    // Antes eran 5 anillos [-4,-2,0,2,4]; ahora son 15, espaciados ~0.86 cm
-    // Cubriendo el mismo rango aprox [-6 .. +6]
-    const N_ANILLOS_VARILLA = 15;
-    const Z_MIN = -6;
-    const Z_MAX = 6;
+    // 10 anillos de partículas orbitando alrededor de la varilla
+    const N_ANILLOS_VARILLA = 10;
+    const Z_MIN = -5;
+    const Z_MAX = 5;
     const alturasZ = [];
     for (let k = 0; k < N_ANILLOS_VARILLA; k++) {
       const z = Z_MIN + (k / (N_ANILLOS_VARILLA - 1)) * (Z_MAX - Z_MIN);
@@ -1075,6 +1073,9 @@ function crearMaterialLinea() {
   });
 }
 
+// ==================== CAMBIO CLAVE ====================
+// La varilla ahora genera 10 grupos de líneas de campo a lo
+// largo del eje Z (antes eran solo 5).
 function crearLineas() {
   while (lineasGroup.children.length) {
     const c = lineasGroup.children[0];
@@ -1086,9 +1087,17 @@ function crearLineas() {
   const semillas = [];
   if (estado.elemento === 'axial') {
     const N = 12;
+    // Antes: [-4,-2,0,2,4]  →  5 valores
+    // Ahora: 10 valores uniformemente distribuidos entre -5 y 5
+    const N_LINEAS_Z = 10;
+    const Z_MIN = -5, Z_MAX = 5;
+    const valoresZ = [];
+    for (let k = 0; k < N_LINEAS_Z; k++) {
+      valoresZ.push(Z_MIN + (k / (N_LINEAS_Z - 1)) * (Z_MAX - Z_MIN));
+    }
     for (let i = 0; i < N; i++) {
       const ang = (i / N) * 2 * Math.PI;
-      for (const z of [-4, -2, 0, 2, 4]) {
+      for (const z of valoresZ) {
         semillas.push(new THREE.Vector3(
           0.5 * Math.cos(ang),
           ALTURA_EJE_CM + 0.5 * Math.sin(ang),
@@ -1702,7 +1711,7 @@ const laboratorio = crearLaboratorio();
 scene.add(laboratorio);
 
 // ============================================================
-// PANEL VR — TABLERO FIJO (con textos a MITAD de tamaño)
+// PANEL VR — TABLERO FIJO (con textos MUY reducidos)
 // ============================================================
 const panelVRGroup = new THREE.Group();
 panelVRGroup.position.set(0, 1.75, -1.9);
@@ -1758,8 +1767,8 @@ function crearPlanoTexto(ancho, alto, dibujar, posZ) {
   return mesh;
 }
 
-// NOTA: el parámetro `size` ahora es el ANCHO del plano.
-// Lo redujimos a la mitad respecto a la versión anterior.
+// Texto de etiqueta. Ahora `size` es el ancho en metros del plano.
+// Antes era 0.8 → ahora usamos 0.5 para las etiquetas y 0.3 para los valores.
 function crearTextoVR(texto, x, y, size, color, tamanoFuente) {
   const fuente = tamanoFuente || 90;
   const alto = size * 0.25;
@@ -1864,8 +1873,8 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
   grupo.position.set(x, y, PANEL_Z);
   grupo.userData.esSlider = true;
 
-  // Etiqueta FIJA — ancho reducido a la mitad: antes 1.6, ahora 0.8
-  const etiquetaPlano = crearTextoVR(etiqueta, x, y + 0.10, 0.8, '#8fa3c0', 95);
+  // Etiqueta — ancho 0.5 m (muy reducido)
+  const etiquetaPlano = crearTextoVR(etiqueta, x, y + 0.09, 0.5, '#8fa3c0', 90);
 
   const pista = new THREE.Mesh(
     new THREE.PlaneGeometry(w, 0.028),
@@ -1888,8 +1897,8 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
   perilla.userData.esPerilla = true;
   grupo.add(perilla);
 
-  // Valor FIJO — ancho reducido a la mitad: antes 0.85, ahora 0.42
-  const valorPlano = crearTextoVR('0', x + w / 2 + 0.28, y, 0.42, '#4da3ff', 95);
+  // Valor — ancho 0.3 m (muy reducido)
+  const valorPlano = crearTextoVR('0', x + w / 2 + 0.22, y, 0.3, '#4da3ff', 90);
 
   grupo.userData.min = min;
   grupo.userData.max = max;
@@ -1911,7 +1920,7 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
     relleno.position.z = 0.0005;
 
     const txtValor = grupo.userData.valor.toFixed(step < 1 ? 1 : 0) + ' ' + grupo.userData.unidad;
-    redibujarTextoVR(valorPlano, txtValor, '#4da3ff', 95);
+    redibujarTextoVR(valorPlano, txtValor, '#4da3ff', 90);
   }
   grupo.userData.actualizarVisual = actualizarVisual;
   actualizarVisual();
@@ -1921,10 +1930,10 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
 }
 
 // ============================================================
-// DISTRIBUCIÓN DEL TABLERO (con letras a MITAD de tamaño)
+// DISTRIBUCIÓN DEL TABLERO (con textos muy pequeños)
 // ============================================================
-// Antes: ancho 2.0 → ahora 1.0
-crearTextoVR('⚡ LEY DE BIOT-SAVART', 0, PANEL_ALTO / 2 - 0.12, 1.0, '#22d3ee', 130);
+// Título — ancho 0.7 m (antes era 1.0)
+crearTextoVR('⚡ LEY DE BIOT-SAVART', 0, PANEL_ALTO / 2 - 0.11, 0.7, '#22d3ee', 120);
 
 const sliderI_VR = crearSliderVR(-0.30, 0.50, 1.7, estado.I, 0, 100, 0.5, 0x4da3ff, (v) => {
   estado.I = v;
@@ -2020,8 +2029,8 @@ crearBotonVR('🔄 RESET', 0.10, -0.90, 0.50, 0.085, 0x0891b2, () => {
   mostrarToast('🔄 Reset');
 }, 100);
 
-// Display lectura VR — ancho reducido a la mitad: antes 2.0, ahora 1.0
-const displayLecturaVR = crearTextoVR('B = 0.0000 mT   [VARILLA]', 0, -1.04, 1.0, '#4da3ff', 110);
+// Display lectura VR — ancho 0.6 m (antes era 1.0)
+const displayLecturaVR = crearTextoVR('B = 0.0000 mT   [VARILLA]', 0, -1.04, 0.6, '#4da3ff', 100);
 
 function actualizarPanelVR() {
   const nuevoTexto = estado.elemento === 'axial' ? '⟷ VARILLA ⟶ ESPIRA' : '⟷ ESPIRA ⟶ VARILLA';
