@@ -576,7 +576,7 @@ espiraGroup.visible = false;
 scene.add(espiraGroup);
 
 // ============================================================
-// SONDA  (su punta = esfera roja es el punto de medición)
+// SONDA  (la esfera roja = punto de medición)
 // ============================================================
 const sondaGroup = new THREE.Group();
 
@@ -604,7 +604,8 @@ brazoSonda.position.set(-0.008 * ESCALA_MUNDO, ALTURA_EJE_CM/100 * ESCALA_MUNDO,
 brazoSonda.castShadow = true;
 sondaGroup.add(brazoSonda);
 
-// La esfera roja = sensor del teslámetro (punto de medición)
+// La esfera roja = sensor (punto de medición). Su posición LOCAL dentro del grupo:
+const PUNTA_LOCAL = new THREE.Vector3(-0.016 * ESCALA_MUNDO, ALTURA_EJE_CM/100 * ESCALA_MUNDO, 0);
 const puntaSonda = new THREE.Mesh(
   new THREE.SphereGeometry(0.0022 * ESCALA_MUNDO, 12, 12),
   new THREE.MeshStandardMaterial({
@@ -612,8 +613,6 @@ const puntaSonda = new THREE.Mesh(
     metalness: 0.5, roughness: 0.3
   })
 );
-// Posición LOCAL de la esfera roja dentro del grupo de la sonda
-const PUNTA_LOCAL = new THREE.Vector3(-0.016 * ESCALA_MUNDO, ALTURA_EJE_CM/100 * ESCALA_MUNDO, 0);
 puntaSonda.position.copy(PUNTA_LOCAL);
 sondaGroup.add(puntaSonda);
 
@@ -1300,29 +1299,22 @@ function crearAnilloLimite() {
 }
 
 // ============================================================
-// CÁLCULO DE B  —  AHORA USA LA PUNTA (esfera roja) DE LA SONDA
+// CÁLCULO DE B — USA LA ESFERA ROJA (PUNTA) COMO PUNTO DE MEDICIÓN
 // ============================================================
-// Devuelve la posición lógica (cm, relativa al eje del alambre)
-// del PUNTO DE MEDICIÓN:
-//   - Si el teslámetro está agarrado por el mando → usa la esfera roja del mando
-//   - Si está en el carril → usa la esfera roja de la sonda del carril
 function puntoMedicionLogica() {
   const puntaMundo = new THREE.Vector3();
 
   if (estado.teslametroAgarrado) {
-    // La esfera roja del teslámetro agarrado es la propia esfera del teslametro (displayTesla)
-    // La ubicamos con getWorldPosition del grupo y le sumamos el offset local de la esfera
-    // El offset local es (0, 0.023*ESCALA_MUNDO, 0.0211*ESCALA_MUNDO) aproximadamente
+    // Teslámetro en la mano: su propia esfera roja (displayTesla) es el sensor.
     const offsetLocal = new THREE.Vector3(0, 0.023 * ESCALA_MUNDO, 0.0211 * ESCALA_MUNDO);
     const offsetMundo = offsetLocal.clone().applyQuaternion(teslametroGroup.quaternion);
     teslametroGroup.getWorldPosition(puntaMundo);
     puntaMundo.add(offsetMundo);
   } else {
-    // La esfera roja de la sonda del carril (puntaSonda) está en PUNTA_LOCAL dentro de sondaGroup
+    // Sonda del carril: usamos la posición mundial de la esfera roja
     puntaSonda.getWorldPosition(puntaMundo);
   }
 
-  // Convertir de coordenadas mundo (metros) a coordenadas lógicas (cm)
   const x_cm = (puntaMundo.x - OFFSET_X) / ESCALA_MUNDO * 100;
   const y_cm = (puntaMundo.y - OFFSET_Y) / ESCALA_MUNDO * 100;
   const z_cm = (puntaMundo.z - OFFSET_Z) / ESCALA_MUNDO * 100;
@@ -1384,20 +1376,17 @@ function actualizarDisplay(objeto, texto) {
   objeto.userData.tex.needsUpdate = true;
 }
 
+// CORREGIDO: compensamos el offset X para que la esfera roja (no el carro)
+// quede exactamente en la posición "s" solicitada. NO compensamos Y ni Z
+// porque el carro está correctamente apoyado sobre el carril.
 function actualizarPosicionSonda() {
-  // La sonda se mueve en X a lo largo del carril.
-  // La posición lógica "s" se refiere a la posición de la PUNTA (esfera roja)
-  // de la sonda respecto al origen (centro del elemento).
-  //
-  // La punta está en sondaGroup.position + PUNTA_LOCAL (rotado por grupo).
-  // Para que la punta quede exactamente en s_cm, compensamos el offset local:
-  //    sondaGroup.x = posMundo(s_cm) - PUNTA_LOCAL_world
-  //
-  // Como el grupo no está rotado, PUNTA_LOCAL_world = PUNTA_LOCAL.
   const s_cm = smmToCm(estado.s_mm);
-  const puntoPunta = posMundo(s_cm / 100, 0, 0); // posición deseada de la punta
-  const posBase = puntoPunta.clone().sub(PUNTA_LOCAL);
-  sondaGroup.position.copy(posBase);
+  // La sonda "en reposo" está en posMundo(s_cm/100, 0, 0) con la base apoyada.
+  // El offset de la esfera en X local es PUNTA_LOCAL.x = -0.016*ESCALA_MUNDO.
+  // Para que la PUNTA quede en la posición deseada, desplazamos el grupo +X.
+  const sondaPos = posMundo(s_cm / 100, 0, 0);
+  sondaPos.x -= PUNTA_LOCAL.x; // compensa solo en X
+  sondaGroup.position.copy(sondaPos);
 }
 
 // ============================================================
