@@ -289,11 +289,6 @@ p2.position.set(0.5, 1.4, -1.2);
 scene.add(p2);
 
 // ============================================================
-// SUELO DEL LABORATORIO (reemplaza grid)
-// ============================================================
-// (Se agrega en crearLaboratorio)
-
-// ============================================================
 // MESA
 // ============================================================
 const mesaGroup = new THREE.Group();
@@ -1410,7 +1405,7 @@ function actualizarAudio() {
 }
 
 // ============================================================
-// WEBXR — CONTROLADORES
+// WEBXR — CONTROLADORES CON DETECCIÓN DE MANO
 // ============================================================
 const vrBtn = VRButton.createButton(renderer);
 document.getElementById('VRButton-container').appendChild(vrBtn);
@@ -1418,33 +1413,69 @@ document.getElementById('VRButton-container').appendChild(vrBtn);
 const xrRig = new THREE.Group();
 scene.add(xrRig);
 
-const controllerGrip0 = renderer.xr.getControllerGrip(0);
-const controllerGrip1 = renderer.xr.getControllerGrip(1);
-const controllerModelFactory = new XRControllerModelFactory();
-controllerGrip0.add(controllerModelFactory.createControllerModel(controllerGrip0));
-controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
-xrRig.add(controllerGrip0);
-xrRig.add(controllerGrip1);
+// Guardamos referencias a los controladores junto con su handedness
+const controladoresXR = {
+  left: null,
+  right: null,
+  leftGrip: null,
+  rightGrip: null
+};
 
-function crearRayo() {
+const controllerModelFactory = new XRControllerModelFactory();
+
+// Creamos los 2 controladores y grips, y los asignamos dinámicamente según handedness
+for (let i = 0; i < 2; i++) {
+  const controller = renderer.xr.getController(i);
+  const grip = renderer.xr.getControllerGrip(i);
+
+  const modelo = controllerModelFactory.createControllerModel(grip);
+  grip.add(modelo);
+
+  controller.addEventListener('connected', (event) => {
+    controller.userData.inputSource = event.data;
+    const hand = event.data.handedness; // 'left' | 'right' | 'none'
+    controller.userData.handedness = hand;
+
+    if (hand === 'left') {
+      controladoresXR.left = controller;
+      controladoresXR.leftGrip = grip;
+    } else if (hand === 'right') {
+      controladoresXR.right = controller;
+      controladoresXR.rightGrip = grip;
+    }
+
+    // Asignar rayos según mano
+    const rayo = crearRayo(hand);
+    controller.add(rayo);
+    controller.userData.rayo = rayo;
+  });
+
+  controller.addEventListener('disconnected', () => {
+    if (controller.userData.rayo) {
+      controller.remove(controller.userData.rayo);
+    }
+    controller.userData.inputSource = null;
+    controller.userData.handedness = null;
+    if (controladoresXR.left === controller) controladoresXR.left = null;
+    if (controladoresXR.right === controller) controladoresXR.right = null;
+  });
+
+  xrRig.add(controller);
+  xrRig.add(grip);
+}
+
+function crearRayo(hand) {
   const geo = new THREE.BufferGeometry().setFromPoints([
     new THREE.Vector3(0, 0, 0),
     new THREE.Vector3(0, 0, -1)
   ]);
-  const mat = new THREE.LineBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.85 });
+  // Color según mano: izquierda verde-cyan, derecha naranja
+  const color = hand === 'left' ? 0x22ffaa : 0xffaa44;
+  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85 });
   const line = new THREE.Line(geo, mat);
   line.scale.z = 3;
   return line;
 }
-
-const rayo0 = crearRayo();
-const rayo1 = crearRayo();
-const ctrl0 = renderer.xr.getController(0);
-const ctrl1 = renderer.xr.getController(1);
-ctrl0.add(rayo0);
-ctrl1.add(rayo1);
-xrRig.add(ctrl0);
-xrRig.add(ctrl1);
 
 // ============================================================
 // AMBIENTE LABORATORIO (paredes, ventanas, sol, árboles)
@@ -1531,15 +1562,12 @@ function crearLaboratorio() {
 
   for (let i = -1; i <= 1; i++) {
     const x = i * 4;
-    // Marco exterior
     const marco = new THREE.Mesh(new THREE.BoxGeometry(3.2, 2.4, 0.15), matMarcoVentana);
     marco.position.set(x, 2.2, -7.95);
     lab.add(marco);
-    // Cristal
     const vidrio = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 2.2), matVentana);
     vidrio.position.set(x, 2.2, -7.87);
     lab.add(vidrio);
-    // Travesaños
     const travesañoV = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.2, 0.02), matMarcoVentana);
     travesañoV.position.set(x, 2.2, -7.85);
     lab.add(travesañoV);
@@ -1548,11 +1576,10 @@ function crearLaboratorio() {
     lab.add(travesañoH);
   }
 
-  // ---- Exterior visible por ventanas ----
+  // ---- Exterior ----
   const exterior = new THREE.Group();
   lab.add(exterior);
 
-  // Cielo (plano grande detrás)
   const cielo = new THREE.Mesh(
     new THREE.PlaneGeometry(120, 60),
     new THREE.MeshBasicMaterial({ color: 0x87CEEB, fog: false })
@@ -1560,7 +1587,6 @@ function crearLaboratorio() {
   cielo.position.set(0, 15, -40);
   exterior.add(cielo);
 
-  // Sol
   const sol = new THREE.Mesh(
     new THREE.SphereGeometry(3, 32, 32),
     new THREE.MeshBasicMaterial({ color: 0xfff4b0, fog: false })
@@ -1568,7 +1594,6 @@ function crearLaboratorio() {
   sol.position.set(-15, 14, -35);
   exterior.add(sol);
 
-  // Halo del sol
   const halo = new THREE.Mesh(
     new THREE.CircleGeometry(6, 32),
     new THREE.MeshBasicMaterial({ color: 0xffee88, transparent: true, opacity: 0.4, fog: false })
@@ -1576,7 +1601,6 @@ function crearLaboratorio() {
   halo.position.set(-15, 14, -34.9);
   exterior.add(halo);
 
-  // Pasto
   const pasto = new THREE.Mesh(
     new THREE.PlaneGeometry(120, 40),
     new THREE.MeshStandardMaterial({ color: 0x4a9a4a, roughness: 1 })
@@ -1585,7 +1609,6 @@ function crearLaboratorio() {
   pasto.position.set(0, -0.05, -25);
   exterior.add(pasto);
 
-  // Árboles
   function crearArbol(x, z, escala) {
     const arbol = new THREE.Group();
     const tronco = new THREE.Mesh(
@@ -1618,7 +1641,6 @@ function crearLaboratorio() {
   exterior.add(crearArbol(13, -31, 1.4));
   exterior.add(crearArbol(-18, -30, 1.1));
 
-  // Arbustos
   for (let i = 0; i < 8; i++) {
     const arb = new THREE.Mesh(
       new THREE.SphereGeometry(0.4 + Math.random()*0.3, 8, 6),
@@ -1628,7 +1650,6 @@ function crearLaboratorio() {
     exterior.add(arb);
   }
 
-  // Nubes
   function crearNube(x, y, z) {
     const nube = new THREE.Group();
     const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, fog: false });
@@ -1644,7 +1665,6 @@ function crearLaboratorio() {
   exterior.add(crearNube(8, 20, -42));
   exterior.add(crearNube(-20, 17, -40));
 
-  // Luz del sol direccional
   const luzSol = new THREE.DirectionalLight(0xfff0c0, 1.3);
   luzSol.position.set(-10, 15, -25);
   luzSol.castShadow = true;
@@ -1663,21 +1683,27 @@ const laboratorio = crearLaboratorio();
 scene.add(laboratorio);
 
 // ============================================================
-// PANEL VR — TABLERO DE CONTROL TIPO PARED
+// PANEL VR — TABLERO DETRÁS DE LA MESA Y MÁS ALTO
 // ============================================================
+// La mesa está en (0, ~0.95, -0.7). El tablero se coloca DETRÁS (más -Z)
+// y elevado para que el usuario pueda ver los dos a la vez.
 const panelVRGroup = new THREE.Group();
-panelVRGroup.position.set(1.35, 1.35, -0.3);
-panelVRGroup.rotation.y = -Math.PI / 2;
+
+// Ajustes: posición y rotación
+// Está detrás de la mesa (z = -2.0), elevado (y = 1.65)
+// Inclinado ligeramente hacia el usuario (rotation.x positivo = inclinado hacia abajo del usuario)
+panelVRGroup.position.set(0, 1.65, -2.0);
+panelVRGroup.rotation.x = -0.15; // ligera inclinación hacia el usuario
 panelVRGroup.visible = false;
 scene.add(panelVRGroup);
 
-const PANEL_ANCHO = 2.2;
-const PANEL_ALTO = 1.75;
+const PANEL_ANCHO = 2.6;
+const PANEL_ALTO = 1.6;
 const PANEL_Z = 0.021;
 
 // Fondo
 const panelFondo = new THREE.Mesh(
-  new THREE.BoxGeometry(PANEL_ANCHO, PANEL_ALTO, 0.04),
+  new THREE.BoxGeometry(PANEL_ANCHO, PANEL_ALTO, 0.06),
   new THREE.MeshStandardMaterial({
     color: 0x0a1628,
     metalness: 0.3,
@@ -1686,34 +1712,54 @@ const panelFondo = new THREE.Mesh(
     emissiveIntensity: 0.6
   })
 );
-panelFondo.position.z = -0.02;
+panelFondo.position.z = -0.03;
 panelVRGroup.add(panelFondo);
 
 // Marco luminoso
-const marcoGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(PANEL_ANCHO, PANEL_ALTO, 0.04));
+const marcoGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(PANEL_ANCHO, PANEL_ALTO, 0.06));
 const marco = new THREE.LineSegments(marcoGeo, new THREE.LineBasicMaterial({ color: 0x22d3ee }));
 panelVRGroup.add(marco);
 
 // -------- Helpers --------
-function crearTextoVR(texto, x, y, size, color, align) {
+// Texto con fondo oscuro semitransparente para mejor legibilidad
+function crearTextoVR(texto, x, y, size, color, align, conFondo) {
   align = align || 'center';
+  conFondo = conFondo !== false;
+
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
-  canvas.height = 128;
+  canvas.height = 160;
   const ctx = canvas.getContext('2d');
+
+  if (conFondo) {
+    // Fondo oscuro para que se lea bien sobre cualquier fondo del panel
+    ctx.fillStyle = 'rgba(3, 8, 20, 0.75)';
+    ctx.fillRect(0, 20, 1024, 120);
+    ctx.strokeStyle = 'rgba(34, 211, 238, 0.35)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(3, 23, 1018, 114);
+  }
+
   ctx.fillStyle = color || '#22d3ee';
-  ctx.font = 'bold 64px Arial';
+  ctx.font = 'bold 68px Arial';
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
   ctx.shadowColor = color || '#22d3ee';
-  ctx.shadowBlur = 14;
-  const xTex = align === 'left' ? 20 : (align === 'right' ? 1004 : 512);
-  ctx.fillText(texto, xTex, 64);
+  ctx.shadowBlur = 12;
+  const xTex = align === 'left' ? 30 : (align === 'right' ? 994 : 512);
+  ctx.fillText(texto, xTex, 80);
+
   const tex = new THREE.CanvasTexture(canvas);
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-  sprite.position.set(x, y, PANEL_Z + 0.002);
-  sprite.scale.set(size, size * 0.125, 1);
-  sprite.renderOrder = 10;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false
+  }));
+  sprite.position.set(x, y, PANEL_Z + 0.003);
+  sprite.scale.set(size, size * (160/1024), 1);
+  sprite.renderOrder = 20;
+  sprite.userData.esTexto = true;
   panelVRGroup.add(sprite);
   return sprite;
 }
@@ -1750,18 +1796,18 @@ function crearBotonVR(texto, x, y, w, h, color, onClick, fontSize) {
   return btn;
 }
 
-// -------- SLIDER ARRASTRABLE --------
-function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, etiqueta) {
+// -------- SLIDER ARRASTRABLE CON ETIQUETA PROPIA --------
+function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, etiqueta, unidad) {
   const grupo = new THREE.Group();
   grupo.position.set(x, y, PANEL_Z);
   grupo.userData.esSlider = true;
 
-  // Etiqueta
-  crearTextoVR(etiqueta, x, y + 0.085, 0.40, '#8fa3c0');
+  // Etiqueta ARRIBA del slider, con fondo para que se lea bien
+  crearTextoVR(etiqueta, x, y + 0.115, 1.05, '#8fa3c0');
 
   // Pista
   const pista = new THREE.Mesh(
-    new THREE.PlaneGeometry(w, 0.018),
+    new THREE.PlaneGeometry(w, 0.022),
     new THREE.MeshBasicMaterial({ color: 0x1e293b })
   );
   pista.userData.esPista = true;
@@ -1769,22 +1815,22 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
 
   // Relleno activo
   const relleno = new THREE.Mesh(
-    new THREE.PlaneGeometry(w, 0.018),
-    new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.85 })
+    new THREE.PlaneGeometry(w, 0.022),
+    new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.9 })
   );
   relleno.userData.esRelleno = true;
   grupo.add(relleno);
 
   // Perilla
   const perilla = new THREE.Mesh(
-    new THREE.CircleGeometry(0.032, 24),
+    new THREE.CircleGeometry(0.042, 24),
     new THREE.MeshBasicMaterial({ color: 0xffffff })
   );
   perilla.userData.esPerilla = true;
   grupo.add(perilla);
 
-  // Valor
-  const valorTxt = crearTextoVR('0', x + w/2 + 0.15, y, 0.30, '#4da3ff');
+  // Valor a la derecha del slider
+  const valorTxt = crearTextoVR('0', x + w/2 + 0.20, y, 0.85, '#4da3ff');
   valorTxt.userData.esValorSlider = true;
 
   grupo.userData.min = min;
@@ -1796,6 +1842,7 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
   grupo.userData.perilla = perilla;
   grupo.userData.relleno = relleno;
   grupo.userData.valorTxt = valorTxt;
+  grupo.userData.unidad = unidad || '';
 
   function actualizarVisual() {
     const t = (grupo.userData.valor - min) / (max - min);
@@ -1805,17 +1852,22 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
     relleno.position.x = -w/2 + (t * w) / 2;
     relleno.position.z = 0.0005;
 
-    // Redibujar el texto del valor
     const cv = valorTxt.material.map.image;
     const c2 = cv.getContext('2d');
     c2.clearRect(0, 0, cv.width, cv.height);
+    c2.fillStyle = 'rgba(3, 8, 20, 0.75)';
+    c2.fillRect(0, 20, 1024, 120);
+    c2.strokeStyle = 'rgba(77, 163, 255, 0.4)';
+    c2.lineWidth = 3;
+    c2.strokeRect(3, 23, 1018, 114);
     c2.fillStyle = '#4da3ff';
-    c2.font = 'bold 64px Arial';
+    c2.font = 'bold 68px Arial';
     c2.textAlign = 'center';
     c2.textBaseline = 'middle';
     c2.shadowColor = '#4da3ff';
-    c2.shadowBlur = 14;
-    c2.fillText(grupo.userData.valor.toFixed(step < 1 ? 1 : 0), 512, 64);
+    c2.shadowBlur = 12;
+    const txtValor = grupo.userData.valor.toFixed(step < 1 ? 1 : 0) + ' ' + grupo.userData.unidad;
+    c2.fillText(txtValor, 512, 80);
     valorTxt.material.map.needsUpdate = true;
   }
   grupo.userData.actualizarVisual = actualizarVisual;
@@ -1826,44 +1878,44 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
 }
 
 // ============================================================
-// DISTRIBUCIÓN DEL TABLERO
+// DISTRIBUCIÓN DEL TABLERO (más alto, todos los nombres visibles)
 // ============================================================
-crearTextoVR('⚡ LEY DE BIOT-SAVART', 0, PANEL_ALTO/2 - 0.10, 1.0, '#22d3ee');
+crearTextoVR('⚡ LEY DE BIOT-SAVART', 0, PANEL_ALTO/2 - 0.12, 1.6, '#22d3ee');
 
-// --- Sliders ---
-const sliderI_VR = crearSliderVR(-0.05, 0.50, 1.5, estado.I, 0, 100, 0.5, 0x4da3ff, (v) => {
+// --- Sliders (con nombres completos y valor en unidades) ---
+const sliderI_VR = crearSliderVR(-0.15, 0.42, 1.7, estado.I, 0, 100, 0.5, 0x4da3ff, (v) => {
   estado.I = v;
   document.getElementById('corriente').value = v;
   document.getElementById('valI').textContent = v.toFixed(1) + ' A';
   document.getElementById('hudI').textContent = v.toFixed(1);
   actualizarCampo();
   actualizarAudio();
-}, 'Corriente I (A)');
+}, 'Corriente eléctrica  I', 'A');
 
-const sliderS_VR = crearSliderVR(-0.05, 0.22, 1.5, estado.s_mm, 5, 300, 1, 0x10b981, (v) => {
+const sliderS_VR = crearSliderVR(-0.15, 0.10, 1.7, estado.s_mm, 5, 300, 1, 0x10b981, (v) => {
   estado.s_mm = v;
   document.getElementById('posicion').value = v;
   document.getElementById('valS').textContent = v.toFixed(0) + ' mm';
   document.getElementById('hudS').textContent = v.toFixed(1);
   actualizarPosicionSonda();
   actualizarLectura();
-}, 'Posición sonda (mm)');
+}, 'Posición de la sonda  s', 'mm');
 
-const sliderAmp_VR = crearSliderVR(-0.05, -0.06, 1.5, estado.amplificacion, 1, 500, 1, 0xf59e0b, (v) => {
+const sliderAmp_VR = crearSliderVR(-0.15, -0.22, 1.7, estado.amplificacion, 1, 500, 1, 0xf59e0b, (v) => {
   estado.amplificacion = v;
   document.getElementById('amplificacion').value = v;
   document.getElementById('valAmp').textContent = v;
   crearOrbitas();
   crearLineas();
   regenerarParticulas();
-}, 'Amplificación visual');
+}, 'Amplificación visual', '×');
 
-// --- Botones fila 1 ---
-crearBotonVR('⟷ VARILLA/ESPIRA', -0.55, -0.25, 0.95, 0.10, 0x2563eb, () => {
+// --- Fila de botones ---
+crearBotonVR('⟷ VARILLA / ESPIRA', -0.65, -0.40, 1.00, 0.10, 0x2563eb, () => {
   cambiarElemento();
 }, 30);
 
-const btnSonidoVR = crearBotonVR('🔊 SONIDO', 0.62, -0.25, 0.60, 0.10, 0xf59e0b, () => {
+const btnSonidoVR = crearBotonVR('🔊 SONIDO', 0.72, -0.40, 0.60, 0.10, 0xf59e0b, () => {
   toggleSonido();
   const ctx = btnSonidoVR.userData.ctx;
   ctx.fillStyle = audioActivo ? '#059669' : '#f59e0b';
@@ -1876,14 +1928,14 @@ const btnSonidoVR = crearBotonVR('🔊 SONIDO', 0.62, -0.25, 0.60, 0.10, 0xf59e0
   btnSonidoVR.userData.tex.needsUpdate = true;
 }, 34);
 
-// --- Toggles ---
+// --- Toggles con nombres completos ---
 function crearToggleVR(texto, x, y, activo, onClick) {
-  const btn = crearBotonVR(texto, x, y, 0.40, 0.085, activo ? 0x0891b2 : 0x334155, () => {
+  const btn = crearBotonVR(texto, x, y, 0.46, 0.085, activo ? 0x0891b2 : 0x334155, () => {
     const nuevo = !btn.userData.activo;
     btn.userData.activo = nuevo;
     onClick(nuevo);
     actualizarToggleVisual(btn, texto, nuevo);
-  }, 24);
+  }, 22);
   btn.userData.activo = activo;
   btn.userData.textoBase = texto;
   return btn;
@@ -1895,61 +1947,42 @@ function actualizarToggleVisual(btn, texto, activo) {
   ctx.fillRect(0, 0, 512, 256);
   ctx.strokeStyle = '#fff'; ctx.lineWidth = 8; ctx.strokeRect(6,6,500,244);
   ctx.fillStyle = '#fff';
-  ctx.font = 'bold 26px Arial';
+  ctx.font = 'bold 22px Arial';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(texto + (activo ? ' ✓' : ' ✗'), 256, 128);
   btn.userData.tex.needsUpdate = true;
 }
 
-crearToggleVR('Zona', -0.85, -0.43, estado.mostrarZona, (v) => {
-  estado.mostrarZona = v; zonaGroup.visible = v;
-  document.getElementById('chkZona').checked = v;
-});
-crearToggleVR('Órbitas', -0.42, -0.43, estado.mostrarVectores, (v) => {
-  estado.mostrarVectores = v; vectoresGroup.visible = v;
-  document.getElementById('chkVectores').checked = v;
-  if (v) crearOrbitas();
-});
-crearToggleVR('Líneas', 0.01, -0.43, estado.mostrarLineas, (v) => {
-  estado.mostrarLineas = v; lineasGroup.visible = v;
-  document.getElementById('chkLineas').checked = v;
-  if (v) { crearLineas(); regenerarParticulas(); }
-});
-crearToggleVR('Partíc.', 0.44, -0.43, estado.mostrarParticulas, (v) => {
-  estado.mostrarParticulas = v; particulasGroup.visible = v;
-  document.getElementById('chkParticulas').checked = v;
-  if (v) regenerarParticulas();
-});
-crearToggleVR('Límite', 0.85, -0.43, estado.mostrarLimite, (v) => {
-  estado.mostrarLimite = v; limiteGroup.visible = v;
-  document.getElementById('chkLimite').checked = v;
-  crearAnilloLimite();
-});
+crearToggleVR('Zona',       -1.02, -0.55, estado.mostrarZona,       (v) => { estado.mostrarZona = v; zonaGroup.visible = v; document.getElementById('chkZona').checked = v; });
+crearToggleVR('Órbitas',    -0.53, -0.55, estado.mostrarVectores,   (v) => { estado.mostrarVectores = v; vectoresGroup.visible = v; document.getElementById('chkVectores').checked = v; if (v) crearOrbitas(); });
+crearToggleVR('Líneas',     -0.04, -0.55, estado.mostrarLineas,     (v) => { estado.mostrarLineas = v; lineasGroup.visible = v; document.getElementById('chkLineas').checked = v; if (v) { crearLineas(); regenerarParticulas(); } });
+crearToggleVR('Partículas',  0.45, -0.55, estado.mostrarParticulas, (v) => { estado.mostrarParticulas = v; particulasGroup.visible = v; document.getElementById('chkParticulas').checked = v; if (v) regenerarParticulas(); });
+crearToggleVR('Límite',      0.94, -0.55, estado.mostrarLimite,     (v) => { estado.mostrarLimite = v; limiteGroup.visible = v; document.getElementById('chkLimite').checked = v; crearAnilloLimite(); });
 
 // --- Acciones ---
-crearBotonVR('📌 GUARDAR', -0.72, -0.62, 0.42, 0.09, 0x059669, () => {
+crearBotonVR('📌 GUARDAR', -0.85, -0.72, 0.44, 0.085, 0x059669, () => {
   const B = actualizarLectura();
   agregarFila(estado.elemento, estado.I, estado.s_mm, B);
   mostrarToast('✅ Guardado');
-}, 28);
+}, 26);
 
-crearBotonVR('B vs I', -0.28, -0.62, 0.30, 0.09, 0x2563eb, () => {
+crearBotonVR('B vs I', -0.35, -0.72, 0.34, 0.085, 0x2563eb, () => {
   document.getElementById('btnBarridoI').click();
-}, 28);
+}, 26);
 
-crearBotonVR('B vs s', 0.06, -0.62, 0.30, 0.09, 0x2563eb, () => {
+crearBotonVR('B vs s', 0.06, -0.72, 0.34, 0.085, 0x2563eb, () => {
   document.getElementById('btnBarridoS').click();
-}, 28);
+}, 26);
 
-crearBotonVR('📄 REPORTE', 0.60, -0.62, 0.55, 0.09, 0x9333ea, () => {
+crearBotonVR('📄 REPORTE', 0.65, -0.72, 0.60, 0.085, 0x9333ea, () => {
   document.getElementById('btnReporte').click();
-}, 28);
+}, 26);
 
-crearBotonVR('🗑️ LIMPIAR', -0.45, -0.73, 0.42, 0.08, 0xdc2626, () => {
+crearBotonVR('🗑️ LIMPIAR', -0.55, -0.84, 0.44, 0.08, 0xdc2626, () => {
   document.getElementById('btnLimpiar').click();
-}, 24);
+}, 22);
 
-crearBotonVR('🔄 RESET', 0.10, -0.73, 0.42, 0.08, 0x0891b2, () => {
+crearBotonVR('🔄 RESET', 0.10, -0.84, 0.44, 0.08, 0x0891b2, () => {
   document.getElementById('corriente').value = 15;
   document.getElementById('corriente').dispatchEvent(new Event('input'));
   document.getElementById('posicion').value = 100;
@@ -1960,24 +1993,29 @@ crearBotonVR('🔄 RESET', 0.10, -0.73, 0.42, 0.08, 0x0891b2, () => {
   sliderS_VR.userData.valor = 100; sliderS_VR.userData.actualizarVisual();
   sliderAmp_VR.userData.valor = 50; sliderAmp_VR.userData.actualizarVisual();
   mostrarToast('🔄 Reset');
-}, 24);
+}, 22);
 
-// --- Display de lectura ---
-const displayLecturaVR = crearTextoVR('B = 0.0000 mT   [VARILLA]', 0, -0.87, 1.3, '#4da3ff');
+// --- Display de lectura en vivo ---
+const displayLecturaVR = crearTextoVR('B = 0.0000 mT   [VARILLA]', 0, -0.98, 1.7, '#4da3ff');
 
 function actualizarPanelVR() {
   const B = actualizarLectura();
   const canvas = displayLecturaVR.material.map.image;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(3, 8, 20, 0.85)';
+  ctx.fillRect(0, 20, 1024, 120);
+  ctx.strokeStyle = 'rgba(77, 163, 255, 0.6)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(3, 23, 1018, 114);
   ctx.fillStyle = '#4da3ff';
-  ctx.font = 'bold 60px Courier New';
+  ctx.font = 'bold 62px Courier New';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.shadowColor = '#4da3ff';
   ctx.shadowBlur = 20;
   const elem = estado.elemento === 'axial' ? 'VARILLA' : 'ESPIRA';
-  ctx.fillText(`B = ${B.toFixed(4)} mT   [${elem}]`, 512, 64);
+  ctx.fillText(`B = ${B.toFixed(4)} mT   [${elem}]`, 512, 80);
   displayLecturaVR.material.map.needsUpdate = true;
 }
 
@@ -2085,8 +2123,11 @@ function actualizarSliderArrastrando() {
 // SESIÓN XR
 // ============================================================
 renderer.xr.addEventListener('sessionstart', () => {
-  xrRig.position.set(0.2, 0, 0.4);
-  xrRig.rotation.y = -Math.PI / 2;
+  // El usuario se coloca FRENTE a la mesa, mirando hacia -Z
+  // La mesa está en (0, 0.95, -0.7), el tablero en (0, 1.65, -2.0)
+  // El usuario se coloca en (0, 0, 0.8) mirando hacia -Z
+  xrRig.position.set(0, 0, 0.8);
+  xrRig.rotation.y = 0; // mirando hacia -Z por defecto
 
   controls.enabled = false;
   document.getElementById('panel').style.display = 'none';
@@ -2105,35 +2146,41 @@ renderer.xr.addEventListener('sessionend', () => {
   sliderActivo = null;
 });
 
-function configurarControlador(index) {
-  const controller = renderer.xr.getController(index);
-  controller.addEventListener('connected', (event) => {
-    controller.userData.gamepad = event.data.gamepad;
-    controller.userData.inputSource = event.data;
+// ============================================================
+// MANEJADORES DE GATILLO POR MANO (left/right)
+// ============================================================
+// Izquierdo: guardar medición rápida
+// Derecho: interactuar con el panel
+
+function configurarSelectStart(controller) {
+  controller.addEventListener('selectstart', () => {
+    const hand = controller.userData.handedness;
+    if (hand === 'left') {
+      // Guardar medición rápida
+      const B = actualizarLectura();
+      agregarFila(estado.elemento, estado.I, estado.s_mm, B);
+      mostrarToast('✅ Medición guardada');
+    } else if (hand === 'right') {
+      // Interactuar con panel
+      manejarSelectStart(controller);
+    }
   });
-  controller.addEventListener('disconnected', () => {
-    controller.userData.gamepad = null;
+
+  controller.addEventListener('selectend', () => {
+    const hand = controller.userData.handedness;
+    if (hand === 'right') {
+      manejarSelectEnd();
+    }
   });
 }
 
-configurarControlador(0);
-configurarControlador(1);
+// Configuramos ambos controladores
+configurarSelectStart(renderer.xr.getController(0));
+configurarSelectStart(renderer.xr.getController(1));
 
-// Gatillo izquierdo: guardar medición rápida
-renderer.xr.getController(0).addEventListener('selectstart', () => {
-  const B = actualizarLectura();
-  agregarFila(estado.elemento, estado.I, estado.s_mm, B);
-  mostrarToast('✅ Medición guardada');
-});
-
-// Gatillo derecho: interactuar con el panel
-renderer.xr.getController(1).addEventListener('selectstart', () => {
-  manejarSelectStart(renderer.xr.getController(1));
-});
-renderer.xr.getController(1).addEventListener('selectend', () => {
-  manejarSelectEnd();
-});
-
+// ============================================================
+// JOYSTICKS: izquierdo controla sonda, derecho controla corriente
+// ============================================================
 function procesarControlesXR() {
   const session = renderer.xr.getSession();
   if (!session) return;
@@ -2143,7 +2190,8 @@ function procesarControlesXR() {
     const gp = src.gamepad;
 
     if (src.handedness === 'left') {
-      const x = gp.axes[2] || 0;
+      // Joystick izquierdo: posición de la sonda
+      const x = gp.axes[2] !== undefined ? gp.axes[2] : gp.axes[0];
       if (Math.abs(x) > 0.15) {
         estado.s_mm = Math.max(5, Math.min(300, estado.s_mm + x * 300 * 0.016));
         document.getElementById('posicion').value = estado.s_mm;
@@ -2157,7 +2205,8 @@ function procesarControlesXR() {
     }
 
     if (src.handedness === 'right') {
-      const y = gp.axes[3] || 0;
+      // Joystick derecho: corriente
+      const y = gp.axes[3] !== undefined ? gp.axes[3] : gp.axes[1];
       if (Math.abs(y) > 0.15) {
         estado.I = Math.max(0, Math.min(100, estado.I - y * 50 * 0.016));
         document.getElementById('corriente').value = estado.I;
