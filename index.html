@@ -384,7 +384,6 @@ for (let cm = 0; cm <= CARRIL_LARGO_CM; cm++) {
 }
 scene.add(carrilGroup);
 
-// Texto con PLANO (no sprite) para que no mire a la cámara
 function crearTextoFijo(texto, x_cm, y_cm, z_cm, size_cm, color, rotY) {
   size_cm = size_cm || 1.0;
   color = color || '#4da3ff';
@@ -457,7 +456,7 @@ fuente.rotation.y = 0.35;
 scene.add(fuente);
 
 // ============================================================
-// TESLÁMETRO (con display independiente)
+// TESLÁMETRO
 // ============================================================
 const teslametroGroup = new THREE.Group();
 teslametroGroup.position.copy(posMundo(0.38, 0, -0.08));
@@ -813,7 +812,18 @@ function crearOrbitas() {
   const PARTICULAS_POR_ORBITA = 20;
 
   if (estado.elemento === 'axial') {
-    const alturasZ = [-4, -2, 0, 2, 4];
+    // ============ VARILLA: 15 anillos distribuidos a lo largo del eje Z ============
+    // Antes eran 5 anillos [-4,-2,0,2,4]; ahora son 15, espaciados ~0.86 cm
+    // Cubriendo el mismo rango aprox [-6 .. +6]
+    const N_ANILLOS_VARILLA = 15;
+    const Z_MIN = -6;
+    const Z_MAX = 6;
+    const alturasZ = [];
+    for (let k = 0; k < N_ANILLOS_VARILLA; k++) {
+      const z = Z_MIN + (k / (N_ANILLOS_VARILLA - 1)) * (Z_MAX - Z_MIN);
+      alturasZ.push(z);
+    }
+
     radiosCM.forEach(radio => {
       const alpha = Math.exp(-radio * K_DECAIMIENTO);
       if (alpha < 0.04) return;
@@ -1286,10 +1296,6 @@ function crearAnilloLimite() {
 // ============================================================
 // CÁLCULO DE B EN POSICIÓN DEL TESLÁMETRO
 // ============================================================
-// El teslámetro puede estar:
-// a) En su posición original fija junto a la fuente
-// b) Agarradura por el mando derecho
-// En ambos casos calculamos B a partir de su posición 3D en el mundo.
 function teslametroPosicionLogica() {
   const pMundo = new THREE.Vector3();
   teslametroGroup.getWorldPosition(pMundo);
@@ -1299,8 +1305,6 @@ function teslametroPosicionLogica() {
   return new THREE.Vector3(x_cm, y_cm, z_cm);
 }
 
-// Calcula B (mT) usando la posición del teslámetro cuando está agarrado,
-// o la posición de la sonda (s_mm) cuando no lo está.
 function calcularB_Actual() {
   if (estado.teslametroAgarrado) {
     const punto = teslametroPosicionLogica();
@@ -1328,26 +1332,20 @@ function actualizarCampo() {
   actualizarLectura();
 }
 
-// ACTUALIZA TODOS los displays: HTML, teslámetro 3D y tablero VR
 function actualizarLectura() {
   const BmT = calcularB_Actual();
   const txt = BmT.toFixed(4);
 
-  // 1) Panel HTML
   document.getElementById('lectura').textContent = txt;
   document.getElementById('hudB').textContent = txt;
 
-  // 2) Display 3D de la fuente
   actualizarDisplay(fuente, `${estado.I.toFixed(1)} A`);
-
-  // 3) Display 3D del teslámetro
   actualizarDisplay(teslametroGroup, `${txt} mT`);
 
-  // 4) Display del tablero VR (parte inferior)
   if (panelVRGroup.visible && displayLecturaVR) {
     const elemStr = estado.elemento === 'axial' ? 'VARILLA' : 'ESPIRA';
     redibujarTextoVR(displayLecturaVR,
-      `B = ${txt} mT   [${elemStr}]`, '#4da3ff', 110);
+      `B = ${txt} mT   [${elemStr}]`, '#4da3ff', 55);
   }
 
   return BmT;
@@ -1704,7 +1702,7 @@ const laboratorio = crearLaboratorio();
 scene.add(laboratorio);
 
 // ============================================================
-// PANEL VR — TABLERO FIJO
+// PANEL VR — TABLERO FIJO (con textos a MITAD de tamaño)
 // ============================================================
 const panelVRGroup = new THREE.Group();
 panelVRGroup.position.set(0, 1.75, -1.9);
@@ -1733,8 +1731,6 @@ const marcoGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(PANEL_ANCHO, PANE
 const marco = new THREE.LineSegments(marcoGeo, new THREE.LineBasicMaterial({ color: 0x22d3ee }));
 panelVRGroup.add(marco);
 
-// IMPORTANTE: los textos del panel VR son PLANOS (Mesh) fijos en el tablero.
-// NO son Sprites. Por eso no miran hacia la cámara.
 function crearPlanoTexto(ancho, alto, dibujar, posZ) {
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
@@ -1762,6 +1758,8 @@ function crearPlanoTexto(ancho, alto, dibujar, posZ) {
   return mesh;
 }
 
+// NOTA: el parámetro `size` ahora es el ANCHO del plano.
+// Lo redujimos a la mitad respecto a la versión anterior.
 function crearTextoVR(texto, x, y, size, color, tamanoFuente) {
   const fuente = tamanoFuente || 90;
   const alto = size * 0.25;
@@ -1866,8 +1864,8 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
   grupo.position.set(x, y, PANEL_Z);
   grupo.userData.esSlider = true;
 
-  // Etiqueta FIJA
-  const etiquetaPlano = crearTextoVR(etiqueta, x, y + 0.14, 1.6, '#8fa3c0', 95);
+  // Etiqueta FIJA — ancho reducido a la mitad: antes 1.6, ahora 0.8
+  const etiquetaPlano = crearTextoVR(etiqueta, x, y + 0.10, 0.8, '#8fa3c0', 95);
 
   const pista = new THREE.Mesh(
     new THREE.PlaneGeometry(w, 0.028),
@@ -1890,8 +1888,8 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
   perilla.userData.esPerilla = true;
   grupo.add(perilla);
 
-  // Valor FIJO
-  const valorPlano = crearTextoVR('0', x + w / 2 + 0.42, y, 0.85, '#4da3ff', 95);
+  // Valor FIJO — ancho reducido a la mitad: antes 0.85, ahora 0.42
+  const valorPlano = crearTextoVR('0', x + w / 2 + 0.28, y, 0.42, '#4da3ff', 95);
 
   grupo.userData.min = min;
   grupo.userData.max = max;
@@ -1923,9 +1921,10 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
 }
 
 // ============================================================
-// DISTRIBUCIÓN DEL TABLERO
+// DISTRIBUCIÓN DEL TABLERO (con letras a MITAD de tamaño)
 // ============================================================
-crearTextoVR('⚡ LEY DE BIOT-SAVART', 0, PANEL_ALTO / 2 - 0.14, 2.0, '#22d3ee', 130);
+// Antes: ancho 2.0 → ahora 1.0
+crearTextoVR('⚡ LEY DE BIOT-SAVART', 0, PANEL_ALTO / 2 - 0.12, 1.0, '#22d3ee', 130);
 
 const sliderI_VR = crearSliderVR(-0.30, 0.50, 1.7, estado.I, 0, 100, 0.5, 0x4da3ff, (v) => {
   estado.I = v;
@@ -2021,16 +2020,14 @@ crearBotonVR('🔄 RESET', 0.10, -0.90, 0.50, 0.085, 0x0891b2, () => {
   mostrarToast('🔄 Reset');
 }, 100);
 
-const displayLecturaVR = crearTextoVR('B = 0.0000 mT   [VARILLA]', 0, -1.04, 2.0, '#4da3ff', 110);
+// Display lectura VR — ancho reducido a la mitad: antes 2.0, ahora 1.0
+const displayLecturaVR = crearTextoVR('B = 0.0000 mT   [VARILLA]', 0, -1.04, 1.0, '#4da3ff', 110);
 
 function actualizarPanelVR() {
-  // El display del tablero se actualiza a través de actualizarLectura()
-  // No hacemos doble llamada aquí.
   const nuevoTexto = estado.elemento === 'axial' ? '⟷ VARILLA ⟶ ESPIRA' : '⟷ ESPIRA ⟶ VARILLA';
   if (btnElementoVR.userData.textoActual !== nuevoTexto) {
     redibujarBotonVR(btnElementoVR, nuevoTexto);
   }
-  // Refresca la lectura (esto ya actualiza el display VR)
   actualizarLectura();
 }
 
@@ -2616,8 +2613,6 @@ function animate() {
   procesarControlesXR();
   actualizarSliderArrastrando();
 
-  // Cada frame, si el teslámetro está agarrado, recalcula la lectura
-  // (esto también actualiza el display del tablero VR en vivo).
   if (estado.teslametroAgarrado) {
     actualizarLectura();
   }
