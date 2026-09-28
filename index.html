@@ -576,12 +576,10 @@ espiraGroup.visible = false;
 scene.add(espiraGroup);
 
 // ============================================================
-// SONDA  (el pivote del grupo = la esfera roja en el origen)
+// SONDA (esfera roja en el origen del grupo)
 // ============================================================
 const sondaGroup = new THREE.Group();
 
-// La ESFERA ROJA está en el ORIGEN del grupo (0,0,0).
-// Así, sondaGroup.position representa exactamente la posición de la esfera.
 const puntaSonda = new THREE.Mesh(
   new THREE.SphereGeometry(0.0022 * ESCALA_MUNDO, 12, 12),
   new THREE.MeshStandardMaterial({
@@ -592,9 +590,7 @@ const puntaSonda = new THREE.Mesh(
 puntaSonda.position.set(0, 0, 0);
 sondaGroup.add(puntaSonda);
 
-// El BRAZO se extiende desde la esfera hacia atrás (+X) y hacia abajo,
-// llegando hasta el carro que está sobre el carril.
-const ALTURA_CARRO_LOCAL = -ALTURA_EJE_CM/100 * ESCALA_MUNDO; // el carro está a esta Y local
+const ALTURA_CARRO_LOCAL = -ALTURA_EJE_CM/100 * ESCALA_MUNDO;
 
 const brazoSonda = new THREE.Mesh(
   new THREE.BoxGeometry(0.020 * ESCALA_MUNDO, 0.0025 * ESCALA_MUNDO, 0.0025 * ESCALA_MUNDO),
@@ -604,8 +600,7 @@ brazoSonda.position.set(0.010 * ESCALA_MUNDO, 0, 0);
 brazoSonda.castShadow = true;
 sondaGroup.add(brazoSonda);
 
-// El POSTE vertical conecta el brazo con el carro
-const alturaPoste = -ALTURA_CARRO_LOCAL; // cuánto baja desde la esfera hasta el carro
+const alturaPoste = -ALTURA_CARRO_LOCAL;
 const posteSonda = new THREE.Mesh(
   new THREE.CylinderGeometry(0.0014 * ESCALA_MUNDO, 0.0014 * ESCALA_MUNDO, alturaPoste, 8),
   new THREE.MeshStandardMaterial({ color: 0x6a7a8c, metalness: 0.8, roughness: 0.3 })
@@ -614,7 +609,6 @@ posteSonda.position.set(0.020 * ESCALA_MUNDO, -alturaPoste / 2, 0);
 posteSonda.castShadow = true;
 sondaGroup.add(posteSonda);
 
-// El CARRO está apoyado sobre el carril
 const baseSonda = new THREE.Mesh(
   new THREE.BoxGeometry(0.02 * ESCALA_MUNDO, 0.007 * ESCALA_MUNDO, 0.02 * ESCALA_MUNDO),
   new THREE.MeshStandardMaterial({ color: 0x4a5a6c, metalness: 0.7, roughness: 0.3 })
@@ -657,14 +651,12 @@ function segmentosEspira() {
   return segs;
 }
 
-// ✅ VERSIÓN REFORZADA: guarda contra singularidad 1/r²
+// ✅ VERSIÓN REFORZADA: guarda 2 mm + anti-NaN
 function calcularB(puntoCM, segmentos, I) {
   const B = new THREE.Vector3();
   const pM = puntoCM.clone().multiplyScalar(CM);
 
-  // Radio mínimo de seguridad (0.5 mm). Representa el tamaño físico
-  // finito del sensor y evita la singularidad 1/r².
-  const R_MIN_M = 0.0005;
+  const R_MIN_M = 0.002;
   const R_MIN_SQ = R_MIN_M * R_MIN_M;
 
   for (let i = 0; i < segmentos.length; i++) {
@@ -673,7 +665,6 @@ function calcularB(puntoCM, segmentos, I) {
     const R = new THREE.Vector3().subVectors(pM, centroM);
     let r2 = R.lengthSq();
     if (r2 < R_MIN_SQ) {
-      // "Inflar" la distancia al mínimo seguro
       const scale = Math.sqrt(R_MIN_SQ / Math.max(r2, 1e-12));
       R.multiplyScalar(scale);
       r2 = R_MIN_SQ;
@@ -683,6 +674,10 @@ function calcularB(puntoCM, segmentos, I) {
       .crossVectors(s.dl, R)
       .multiplyScalar((MU0 * I) / (4 * Math.PI * r * r * r));
     B.add(dB);
+  }
+
+  if (!isFinite(B.x) || !isFinite(B.y) || !isFinite(B.z)) {
+    return new THREE.Vector3(0, 0, 0);
   }
   return B;
 }
@@ -849,7 +844,8 @@ function crearOrbitas() {
       alturasZ.forEach(z => {
         const pRef = new THREE.Vector3(radio, ALTURA_EJE_CM, 0);
         const B = calcularB(pRef, estado.segmentos, estado.I);
-        const mag = B.length();
+        let mag = B.length();
+        if (!isFinite(mag) || isNaN(mag)) mag = 0;
         const velAngular = Math.min(mag * 8e5, 4.0);
 
         for (let i = 0; i < PARTICULAS_POR_ORBITA; i++) {
@@ -891,7 +887,8 @@ function crearOrbitas() {
           centroOrbitaCM.z + u.z * radio
         );
         const B = calcularB(pRef, estado.segmentos, estado.I);
-        const mag = B.length();
+        let mag = B.length();
+        if (!isFinite(mag) || isNaN(mag)) mag = 0;
         const velAngular = Math.min(mag * 8e5, 4.0);
 
         for (let i = 0; i < PARTICULAS_POR_ORBITA; i++) {
@@ -1003,7 +1000,7 @@ function animarOrbitas(dt) {
 }
 
 // ============================================================
-// LÍNEAS DE CAMPO
+// LÍNEAS DE CAMPO (con anti-NaN)
 // ============================================================
 function trazarLinea(semilla, signo) {
   const puntos = [];
@@ -1012,15 +1009,26 @@ function trazarLinea(semilla, signo) {
 
   for (let i = 0; i < 400; i++) {
     const B = calcularB(p, estado.segmentos, estado.I);
-    if (B.length() < 1e-16) break;
+    const magB = B.length();
+    if (magB < 1e-16 || !isFinite(magB)) break;
+
     puntos.push(p.clone());
 
     const dir = B.clone().normalize().multiplyScalar(signo);
+    if (!isFinite(dir.x) || !isFinite(dir.y) || !isFinite(dir.z)) break;
+
     const pMid = p.clone().addScaledVector(dir, h * 0.5);
+    if (!isFinite(pMid.x) || !isFinite(pMid.y) || !isFinite(pMid.z)) break;
+
     const BMid = calcularB(pMid, estado.segmentos, estado.I);
-    if (BMid.length() < 1e-16) break;
+    const magBMid = BMid.length();
+    if (magBMid < 1e-16 || !isFinite(magBMid)) break;
+
     const dir2 = BMid.clone().normalize().multiplyScalar(signo);
+    if (!isFinite(dir2.x) || !isFinite(dir2.y) || !isFinite(dir2.z)) break;
+
     p.addScaledVector(dir2, h);
+    if (!isFinite(p.x) || !isFinite(p.y) || !isFinite(p.z)) break;
 
     if (p.length() > 40) break;
 
@@ -1056,9 +1064,11 @@ function crearGeometriaLinea(puntos) {
 
     const B = calcularB(p, estado.segmentos, estado.I);
     const mag = B.length();
-    const factorMag = Math.min(1, Math.pow(mag * estado.amplificacion * 1e5, 0.15));
+    let factorMag = Math.min(1, Math.pow(mag * estado.amplificacion * 1e5, 0.15));
+    if (!isFinite(factorMag) || isNaN(factorMag)) factorMag = 0;
 
-    const alpha = factorRadial * (0.5 + 0.5 * factorMag);
+    let alpha = factorRadial * (0.5 + 0.5 * factorMag);
+    if (!isFinite(alpha) || isNaN(alpha)) alpha = 0;
 
     const t = Math.min(1, distRadial / RADIO_VISUAL_CM);
     colores[i*3]     = 0.15 + 0.55 * t;
@@ -1285,7 +1295,7 @@ function animarParticulas(dt) {
 }
 
 // ============================================================
-// ANILLO DE LÍMITE
+// ANILLO DE LÍMITE (con anti-NaN)
 // ============================================================
 function crearAnilloLimite() {
   while (limiteGroup.children.length) {
@@ -1300,7 +1310,8 @@ function crearAnilloLimite() {
   for (let d = 0.5; d < 40; d += 0.5) {
     const p = new THREE.Vector3(d, ALTURA_EJE_CM, 0);
     const B = calcularB(p, estado.segmentos, estado.I);
-    if (B.length() < umbral) { dLimiteCM = d; break; }
+    const mag = B.length();
+    if (isFinite(mag) && mag < umbral) { dLimiteCM = d; break; }
   }
 
   const linea = new THREE.Line(
@@ -1329,7 +1340,6 @@ function puntoMedicionLogica() {
     teslametroGroup.getWorldPosition(puntaMundo);
     puntaMundo.add(offsetMundo);
   } else {
-    // La esfera roja está en el origen del sondaGroup
     sondaGroup.getWorldPosition(puntaMundo);
   }
 
@@ -1363,7 +1373,6 @@ function actualizarCampo() {
 function actualizarLectura() {
   let BmT = calcularB_Actual();
 
-  // Clamp de seguridad: nunca mostramos más de 9999 mT
   if (!isFinite(BmT) || isNaN(BmT)) BmT = 9999;
   if (BmT > 9999) BmT = 9999;
   if (BmT < 0) BmT = 0;
@@ -1400,12 +1409,10 @@ function actualizarDisplay(objeto, texto) {
   objeto.userData.tex.needsUpdate = true;
 }
 
-// ✅ Posición de la sonda: como la esfera está en el origen del grupo,
-// basta con posicionar el grupo a la altura del alambre.
+// ✅ Como la esfera roja está en el origen del grupo, basta con posicionar
+// el grupo a la altura del alambre.
 function actualizarPosicionSonda() {
   const s_cm = smmToCm(estado.s_mm);
-  // posMundo(s_cm, ALTURA_EJE_CM, 0) → la esfera queda a la altura del eje
-  // del alambre y a la distancia s_cm en X respecto al origen.
   sondaGroup.position.copy(posMundo(s_cm / 100, ALTURA_EJE_CM / 100, 0));
 }
 
