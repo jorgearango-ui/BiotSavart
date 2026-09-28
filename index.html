@@ -384,28 +384,37 @@ for (let cm = 0; cm <= CARRIL_LARGO_CM; cm++) {
 }
 scene.add(carrilGroup);
 
-function crearTexto(texto, x_cm, y_cm, z_cm, size_cm, color) {
+// Texto con PLANO (no sprite) para que no mire a la cámara
+function crearTextoFijo(texto, x_cm, y_cm, z_cm, size_cm, color, rotY) {
   size_cm = size_cm || 1.0;
   color = color || '#4da3ff';
   const canvas = document.createElement('canvas');
-  canvas.width = 256; canvas.height = 64;
+  canvas.width = 512; canvas.height = 128;
   const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'rgba(3, 8, 20, 0.7)';
+  ctx.fillRect(0, 0, 512, 128);
   ctx.fillStyle = color;
-  ctx.font = 'bold 40px Courier New';
+  ctx.font = 'bold 80px Courier New';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(texto, 128, 32);
+  ctx.fillText(texto, 256, 64);
   const tex = new THREE.CanvasTexture(canvas);
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-  sprite.position.copy(posMundo(x_cm / 100, y_cm / 100, z_cm / 100));
-  sprite.scale.set(size_cm * 2 / 100 * ESCALA_MUNDO, size_cm * 0.5 / 100 * ESCALA_MUNDO, 1);
-  return sprite;
+  tex.minFilter = THREE.LinearFilter;
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex, transparent: true, side: THREE.DoubleSide, depthWrite: false
+  });
+  const ancho = size_cm * 2 / 100 * ESCALA_MUNDO;
+  const alto = size_cm * 0.5 / 100 * ESCALA_MUNDO;
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(ancho, alto), mat);
+  mesh.position.copy(posMundo(x_cm / 100, y_cm / 100, z_cm / 100));
+  if (rotY !== undefined) mesh.rotation.y = rotY;
+  return mesh;
 }
 
 for (let cm = 0; cm <= CARRIL_LARGO_CM; cm += 5) {
-  scene.add(crearTexto(cm + 'cm', cm, 1.4, 1.8, 1.0));
+  scene.add(crearTextoFijo(cm + 'cm', cm, 1.4, 1.8, 1.0));
 }
-scene.add(crearTexto('origen', 0, ALTURA_EJE_CM + 3.5, 0, 1.2, '#ff8844'));
+scene.add(crearTextoFijo('origen', 0, ALTURA_EJE_CM + 3.5, 0, 1.2, '#ff8844'));
 
 // ============================================================
 // FUENTE
@@ -448,7 +457,7 @@ fuente.rotation.y = 0.35;
 scene.add(fuente);
 
 // ============================================================
-// TESLÁMETRO
+// TESLÁMETRO (con display independiente)
 // ============================================================
 const teslametroGroup = new THREE.Group();
 teslametroGroup.position.copy(posMundo(0.38, 0, -0.08));
@@ -1270,8 +1279,37 @@ function crearAnilloLimite() {
   linea.computeLineDistances();
   limiteGroup.add(linea);
 
-  const sprite = crearTexto((dLimiteCM * 10).toFixed(0) + ' mm', dLimiteCM + 1.5, ALTURA_EJE_CM + 2.5, 0, 1.0, '#ffaa44');
+  const sprite = crearTextoFijo((dLimiteCM * 10).toFixed(0) + ' mm', dLimiteCM + 1.5, ALTURA_EJE_CM + 2.5, 0, 1.0, '#ffaa44');
   limiteGroup.add(sprite);
+}
+
+// ============================================================
+// CÁLCULO DE B EN POSICIÓN DEL TESLÁMETRO
+// ============================================================
+// El teslámetro puede estar:
+// a) En su posición original fija junto a la fuente
+// b) Agarradura por el mando derecho
+// En ambos casos calculamos B a partir de su posición 3D en el mundo.
+function teslametroPosicionLogica() {
+  const pMundo = new THREE.Vector3();
+  teslametroGroup.getWorldPosition(pMundo);
+  const x_cm = (pMundo.x - OFFSET_X) / ESCALA_MUNDO * 100;
+  const y_cm = (pMundo.y - OFFSET_Y) / ESCALA_MUNDO * 100;
+  const z_cm = (pMundo.z - OFFSET_Z) / ESCALA_MUNDO * 100;
+  return new THREE.Vector3(x_cm, y_cm, z_cm);
+}
+
+// Calcula B (mT) usando la posición del teslámetro cuando está agarrado,
+// o la posición de la sonda (s_mm) cuando no lo está.
+function calcularB_Actual() {
+  if (estado.teslametroAgarrado) {
+    const punto = teslametroPosicionLogica();
+    return calcularB(punto, estado.segmentos, estado.I).length() * 1000;
+  } else {
+    const s_cm = smmToCm(estado.s_mm);
+    const punto = new THREE.Vector3(s_cm, ALTURA_EJE_CM, 0);
+    return calcularB(punto, estado.segmentos, estado.I).length() * 1000;
+  }
 }
 
 // ============================================================
@@ -1290,44 +1328,28 @@ function actualizarCampo() {
   actualizarLectura();
 }
 
-// >>> FUNCIÓN CLAVE CORREGIDA <<<
-// Convierte la posición del teslámetro (coords three, en metros) a las
-// coordenadas lógicas del simulador (cm, con origen en el eje del alambre)
-function teslametroPosicionLogica() {
-  const pMundo = new THREE.Vector3();
-  teslametroGroup.getWorldPosition(pMundo);
-
-  // Invertir el mapeo posMundo(): 
-  // mundo = OFFSET + logico_cm/100 * ESCALA
-  // logico_cm = (mundo - OFFSET) / ESCALA * 100
-  const x_cm = (pMundo.x - OFFSET_X) / ESCALA_MUNDO * 100;
-  const y_cm = (pMundo.y - OFFSET_Y) / ESCALA_MUNDO * 100;
-  const z_cm = (pMundo.z - OFFSET_Z) / ESCALA_MUNDO * 100;
-
-  return new THREE.Vector3(x_cm, y_cm, z_cm);
-}
-
+// ACTUALIZA TODOS los displays: HTML, teslámetro 3D y tablero VR
 function actualizarLectura() {
-  let BmT;
-  if (estado.teslametroAgarrado) {
-    // Modo teslámetro libre: usar su posición real
-    const puntoLogico = teslametroPosicionLogica();
-    const B = calcularB(puntoLogico, estado.segmentos, estado.I);
-    BmT = B.length() * 1000;
-  } else {
-    // Modo sonda fija en el carril
-    const s_cm = smmToCm(estado.s_mm);
-    const puntoP = new THREE.Vector3(s_cm, ALTURA_EJE_CM, 0);
-    const B = calcularB(puntoP, estado.segmentos, estado.I);
-    BmT = B.length() * 1000;
-  }
-
+  const BmT = calcularB_Actual();
   const txt = BmT.toFixed(4);
+
+  // 1) Panel HTML
   document.getElementById('lectura').textContent = txt;
   document.getElementById('hudB').textContent = txt;
 
+  // 2) Display 3D de la fuente
   actualizarDisplay(fuente, `${estado.I.toFixed(1)} A`);
+
+  // 3) Display 3D del teslámetro
   actualizarDisplay(teslametroGroup, `${txt} mT`);
+
+  // 4) Display del tablero VR (parte inferior)
+  if (panelVRGroup.visible && displayLecturaVR) {
+    const elemStr = estado.elemento === 'axial' ? 'VARILLA' : 'ESPIRA';
+    redibujarTextoVR(displayLecturaVR,
+      `B = ${txt} mT   [${elemStr}]`, '#4da3ff', 110);
+  }
+
   return BmT;
 }
 
@@ -1688,7 +1710,6 @@ const panelVRGroup = new THREE.Group();
 panelVRGroup.position.set(0, 1.75, -1.9);
 panelVRGroup.rotation.set(0, 0, 0);
 panelVRGroup.visible = false;
-// IMPORTANTE: lo agregamos a la ESCENA, no al xrRig, para que sea FIJO
 scene.add(panelVRGroup);
 
 const PANEL_ANCHO = 2.8;
@@ -1712,10 +1733,8 @@ const marcoGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(PANEL_ANCHO, PANE
 const marco = new THREE.LineSegments(marcoGeo, new THREE.LineBasicMaterial({ color: 0x22d3ee }));
 panelVRGroup.add(marco);
 
-// -------- Helpers para el tablero --------
-// IMPORTANTE: usamos PLANOS con textura en lugar de Sprites
-// Los Sprites siempre miran a la cámara → "se mueven" con ella.
-// Los Planos quedan fijos en el tablero.
+// IMPORTANTE: los textos del panel VR son PLANOS (Mesh) fijos en el tablero.
+// NO son Sprites. Por eso no miran hacia la cámara.
 function crearPlanoTexto(ancho, alto, dibujar, posZ) {
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
@@ -1743,7 +1762,6 @@ function crearPlanoTexto(ancho, alto, dibujar, posZ) {
   return mesh;
 }
 
-// Texto de etiqueta: fondo oscuro + texto, sin sprites
 function crearTextoVR(texto, x, y, size, color, tamanoFuente) {
   const fuente = tamanoFuente || 90;
   const alto = size * 0.25;
@@ -1767,7 +1785,6 @@ function crearTextoVR(texto, x, y, size, color, tamanoFuente) {
   return plano;
 }
 
-// Redibuja el texto de un plano (útil para el valor del slider)
 function redibujarTextoVR(plano, texto, color, tamanoFuente) {
   const fuente = tamanoFuente || 90;
   const ctx = plano.userData.ctx;
@@ -1789,7 +1806,6 @@ function redibujarTextoVR(plano, texto, color, tamanoFuente) {
   plano.userData.tex.needsUpdate = true;
 }
 
-// Botón con tamaño de letra aumentado
 function crearBotonVR(texto, x, y, w, h, color, onClick, fontSize) {
   fontSize = fontSize || 120;
   const canvas = document.createElement('canvas');
@@ -1845,13 +1861,12 @@ function redibujarBotonVR(btn, nuevoTexto, nuevoColor) {
   btn.userData.tex.needsUpdate = true;
 }
 
-// SLIDER con etiqueta y valor FIJOS (planos, no sprites)
 function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, etiqueta, unidad) {
   const grupo = new THREE.Group();
   grupo.position.set(x, y, PANEL_Z);
   grupo.userData.esSlider = true;
 
-  // Etiqueta FIJA arriba del slider
+  // Etiqueta FIJA
   const etiquetaPlano = crearTextoVR(etiqueta, x, y + 0.14, 1.6, '#8fa3c0', 95);
 
   const pista = new THREE.Mesh(
@@ -1875,7 +1890,7 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
   perilla.userData.esPerilla = true;
   grupo.add(perilla);
 
-  // Valor FIJO a la derecha
+  // Valor FIJO
   const valorPlano = crearTextoVR('0', x + w / 2 + 0.42, y, 0.85, '#4da3ff', 95);
 
   grupo.userData.min = min;
@@ -1912,7 +1927,6 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
 // ============================================================
 crearTextoVR('⚡ LEY DE BIOT-SAVART', 0, PANEL_ALTO / 2 - 0.14, 2.0, '#22d3ee', 130);
 
-// --- Sliders ---
 const sliderI_VR = crearSliderVR(-0.30, 0.50, 1.7, estado.I, 0, 100, 0.5, 0x4da3ff, (v) => {
   estado.I = v;
   document.getElementById('corriente').value = v;
@@ -1940,7 +1954,6 @@ const sliderAmp_VR = crearSliderVR(-0.30, -0.22, 1.7, estado.amplificacion, 1, 5
   regenerarParticulas();
 }, 'Amplificación visual', '×');
 
-// --- Botones con letra más grande ---
 const btnElementoVR = crearBotonVR('⟷ VARILLA / ESPIRA', -0.70, -0.42, 1.20, 0.10, 0x2563eb, () => {
   cambiarElemento();
 }, 120);
@@ -2011,14 +2024,14 @@ crearBotonVR('🔄 RESET', 0.10, -0.90, 0.50, 0.085, 0x0891b2, () => {
 const displayLecturaVR = crearTextoVR('B = 0.0000 mT   [VARILLA]', 0, -1.04, 2.0, '#4da3ff', 110);
 
 function actualizarPanelVR() {
-  const B = actualizarLectura();
-  redibujarTextoVR(displayLecturaVR, `B = ${B.toFixed(4)} mT   [${estado.elemento === 'axial' ? 'VARILLA' : 'ESPIRA'}]`, '#4da3ff', 110);
-
-  // Actualizar texto del botón de elemento
+  // El display del tablero se actualiza a través de actualizarLectura()
+  // No hacemos doble llamada aquí.
   const nuevoTexto = estado.elemento === 'axial' ? '⟷ VARILLA ⟶ ESPIRA' : '⟷ ESPIRA ⟶ VARILLA';
   if (btnElementoVR.userData.textoActual !== nuevoTexto) {
     redibujarBotonVR(btnElementoVR, nuevoTexto);
   }
+  // Refresca la lectura (esto ya actualiza el display VR)
+  actualizarLectura();
 }
 
 // ============================================================
@@ -2053,7 +2066,6 @@ function obtenerHitTeslametro(controller) {
 }
 
 function manejarSelectStart(controller) {
-  // 1) Intentar agarrar el teslámetro
   const hitsTesla = obtenerHitTeslametro(controller);
   if (hitsTesla.length > 0 && !estado.teslametroAgarrado) {
     estado.teslametroAgarrado = true;
@@ -2062,7 +2074,6 @@ function manejarSelectStart(controller) {
     return;
   }
 
-  // 2) Sliders/botones del panel
   const hits = obtenerHits(controller);
   if (hits.length === 0) return;
 
@@ -2605,7 +2616,8 @@ function animate() {
   procesarControlesXR();
   actualizarSliderArrastrando();
 
-  // Si el teslámetro está agarrado, recalcular la lectura en tiempo real
+  // Cada frame, si el teslámetro está agarrado, recalcula la lectura
+  // (esto también actualiza el display del tablero VR en vivo).
   if (estado.teslametroAgarrado) {
     actualizarLectura();
   }
