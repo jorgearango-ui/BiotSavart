@@ -251,10 +251,10 @@ function posMundoInverso(p) {
 // ESCENA
 // ============================================================
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x06080f);
-scene.fog = new THREE.FogExp2(0x06080f, 0.03);
+scene.background = new THREE.Color(0x0a1020);
+scene.fog = new THREE.FogExp2(0x0a1020, 0.012);
 
-const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.01, 100);
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.01, 200);
 
 const renderer = new THREE.WebGLRenderer({ antialias:true });
 renderer.setSize(innerWidth, innerHeight);
@@ -267,18 +267,18 @@ document.body.appendChild(renderer.domElement);
 // ============================================================
 // LUCES
 // ============================================================
-scene.add(new THREE.AmbientLight(0x8899bb, 0.6));
+scene.add(new THREE.AmbientLight(0x8899bb, 0.55));
 
 const keyLight = new THREE.DirectionalLight(0xfff0e0, 1.0);
 keyLight.position.set(0.5, 3.5, 0.5);
 keyLight.castShadow = true;
 keyLight.shadow.mapSize.set(2048, 2048);
-keyLight.shadow.camera.left = -1.5;
-keyLight.shadow.camera.right = 1.5;
-keyLight.shadow.camera.top = 1.5;
-keyLight.shadow.camera.bottom = -1.5;
+keyLight.shadow.camera.left = -2;
+keyLight.shadow.camera.right = 2;
+keyLight.shadow.camera.top = 2;
+keyLight.shadow.camera.bottom = -2;
 keyLight.shadow.camera.near = 0.1;
-keyLight.shadow.camera.far = 8;
+keyLight.shadow.camera.far = 10;
 scene.add(keyLight);
 
 const p1 = new THREE.PointLight(0x4da3ff, 0.6, 4);
@@ -289,11 +289,9 @@ p2.position.set(0.5, 1.4, -1.2);
 scene.add(p2);
 
 // ============================================================
-// SUELO
+// SUELO DEL LABORATORIO (reemplaza grid)
 // ============================================================
-const grid = new THREE.GridHelper(8, 80, 0x18202e, 0x10161f);
-grid.position.y = 0.001;
-scene.add(grid);
+// (Se agrega en crearLaboratorio)
 
 // ============================================================
 // MESA
@@ -681,6 +679,9 @@ function distanciaRadial(p) {
 // ============================================================
 // ESTADO
 // ============================================================
+let timeAcc = 0;
+let lastTime = performance.now();
+
 const estado = {
   elemento: 'axial',
   I: 15,
@@ -1409,13 +1410,12 @@ function actualizarAudio() {
 }
 
 // ============================================================
-// WEBXR — BOTÓN Y CONTROLADORES
+// WEBXR — CONTROLADORES
 // ============================================================
 const vrBtn = VRButton.createButton(renderer);
 document.getElementById('VRButton-container').appendChild(vrBtn);
 
 const xrRig = new THREE.Group();
-xrRig.position.set(0, 0, 0);
 scene.add(xrRig);
 
 const controllerGrip0 = renderer.xr.getControllerGrip(0);
@@ -1431,9 +1431,9 @@ function crearRayo() {
     new THREE.Vector3(0, 0, 0),
     new THREE.Vector3(0, 0, -1)
   ]);
-  const mat = new THREE.LineBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.7 });
+  const mat = new THREE.LineBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.85 });
   const line = new THREE.Line(geo, mat);
-  line.scale.z = 1.5;
+  line.scale.z = 3;
   return line;
 }
 
@@ -1447,47 +1447,289 @@ xrRig.add(ctrl0);
 xrRig.add(ctrl1);
 
 // ============================================================
-// PANEL FLOTANTE VR — OPCIÓN A
-// Pizarra vertical al lado derecho de la mesa, mirando al usuario
+// AMBIENTE LABORATORIO (paredes, ventanas, sol, árboles)
+// ============================================================
+function crearLaboratorio() {
+  const lab = new THREE.Group();
+
+  // ---- Piso ----
+  const piso = new THREE.Mesh(
+    new THREE.PlaneGeometry(20, 20),
+    new THREE.MeshStandardMaterial({ color: 0x2a2f3a, roughness: 0.9, metalness: 0.05 })
+  );
+  piso.rotation.x = -Math.PI / 2;
+  piso.position.y = 0;
+  piso.receiveShadow = true;
+  lab.add(piso);
+
+  // Baldosas suaves
+  for (let i = -10; i <= 10; i += 2) {
+    for (let j = -10; j <= 10; j += 2) {
+      const tile = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.95, 1.95),
+        new THREE.MeshStandardMaterial({ color: ((i+j)/2) % 2 === 0 ? 0x2f3540 : 0x252a34, roughness: 0.85 })
+      );
+      tile.rotation.x = -Math.PI / 2;
+      tile.position.set(i, 0.001, j);
+      lab.add(tile);
+    }
+  }
+
+  // ---- Techo ----
+  const techo = new THREE.Mesh(
+    new THREE.PlaneGeometry(20, 20),
+    new THREE.MeshStandardMaterial({ color: 0x1a1f2a, roughness: 1, side: THREE.DoubleSide })
+  );
+  techo.rotation.x = Math.PI / 2;
+  techo.position.y = 4;
+  lab.add(techo);
+
+  // Lámparas del techo
+  for (const lx of [-4, 0, 4]) {
+    for (const lz of [-4, 4]) {
+      const lampara = new THREE.Mesh(
+        new THREE.BoxGeometry(1.2, 0.08, 0.3),
+        new THREE.MeshBasicMaterial({ color: 0xfff5dd })
+      );
+      lampara.position.set(lx, 3.95, lz);
+      lab.add(lampara);
+      const luz = new THREE.PointLight(0xfff0d0, 0.5, 12);
+      luz.position.set(lx, 3.7, lz);
+      lab.add(luz);
+    }
+  }
+
+  // ---- Paredes ----
+  const matPared = new THREE.MeshStandardMaterial({ color: 0x3d4654, roughness: 0.9 });
+
+  const paredNorte = new THREE.Mesh(new THREE.PlaneGeometry(20, 4), matPared);
+  paredNorte.position.set(0, 2, -8);
+  lab.add(paredNorte);
+
+  const paredSur = new THREE.Mesh(new THREE.PlaneGeometry(20, 4), matPared);
+  paredSur.position.set(0, 2, 8);
+  paredSur.rotation.y = Math.PI;
+  lab.add(paredSur);
+
+  const paredEste = new THREE.Mesh(new THREE.PlaneGeometry(20, 4), matPared);
+  paredEste.position.set(10, 2, 0);
+  paredEste.rotation.y = -Math.PI / 2;
+  lab.add(paredEste);
+
+  const paredOeste = new THREE.Mesh(new THREE.PlaneGeometry(20, 4), matPared);
+  paredOeste.position.set(-10, 2, 0);
+  paredOeste.rotation.y = Math.PI / 2;
+  lab.add(paredOeste);
+
+  // ---- Ventanas (pared Norte) ----
+  const matVentana = new THREE.MeshPhysicalMaterial({
+    color: 0x88ccff, transparent: true, opacity: 0.2,
+    metalness: 0, roughness: 0.05, transmission: 0.9, ior: 1.4,
+    side: THREE.DoubleSide
+  });
+  const matMarcoVentana = new THREE.MeshStandardMaterial({ color: 0x1a1f2a, metalness: 0.7, roughness: 0.3 });
+
+  for (let i = -1; i <= 1; i++) {
+    const x = i * 4;
+    // Marco exterior
+    const marco = new THREE.Mesh(new THREE.BoxGeometry(3.2, 2.4, 0.15), matMarcoVentana);
+    marco.position.set(x, 2.2, -7.95);
+    lab.add(marco);
+    // Cristal
+    const vidrio = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 2.2), matVentana);
+    vidrio.position.set(x, 2.2, -7.87);
+    lab.add(vidrio);
+    // Travesaños
+    const travesañoV = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.2, 0.02), matMarcoVentana);
+    travesañoV.position.set(x, 2.2, -7.85);
+    lab.add(travesañoV);
+    const travesañoH = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.08, 0.02), matMarcoVentana);
+    travesañoH.position.set(x, 2.2, -7.85);
+    lab.add(travesañoH);
+  }
+
+  // ---- Exterior visible por ventanas ----
+  const exterior = new THREE.Group();
+  lab.add(exterior);
+
+  // Cielo (plano grande detrás)
+  const cielo = new THREE.Mesh(
+    new THREE.PlaneGeometry(120, 60),
+    new THREE.MeshBasicMaterial({ color: 0x87CEEB, fog: false })
+  );
+  cielo.position.set(0, 15, -40);
+  exterior.add(cielo);
+
+  // Sol
+  const sol = new THREE.Mesh(
+    new THREE.SphereGeometry(3, 32, 32),
+    new THREE.MeshBasicMaterial({ color: 0xfff4b0, fog: false })
+  );
+  sol.position.set(-15, 14, -35);
+  exterior.add(sol);
+
+  // Halo del sol
+  const halo = new THREE.Mesh(
+    new THREE.CircleGeometry(6, 32),
+    new THREE.MeshBasicMaterial({ color: 0xffee88, transparent: true, opacity: 0.4, fog: false })
+  );
+  halo.position.set(-15, 14, -34.9);
+  exterior.add(halo);
+
+  // Pasto
+  const pasto = new THREE.Mesh(
+    new THREE.PlaneGeometry(120, 40),
+    new THREE.MeshStandardMaterial({ color: 0x4a9a4a, roughness: 1 })
+  );
+  pasto.rotation.x = -Math.PI / 2;
+  pasto.position.set(0, -0.05, -25);
+  exterior.add(pasto);
+
+  // Árboles
+  function crearArbol(x, z, escala) {
+    const arbol = new THREE.Group();
+    const tronco = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.2 * escala, 0.3 * escala, 2 * escala, 8),
+      new THREE.MeshStandardMaterial({ color: 0x5a3a1e, roughness: 0.95 })
+    );
+    tronco.position.y = 1 * escala;
+    tronco.castShadow = true;
+    arbol.add(tronco);
+
+    const copaMat = new THREE.MeshStandardMaterial({ color: 0x2d7a2d, roughness: 1 });
+    const copa1 = new THREE.Mesh(new THREE.SphereGeometry(1.1 * escala, 12, 10), copaMat);
+    copa1.position.y = 2.6 * escala;
+    arbol.add(copa1);
+    const copa2 = new THREE.Mesh(new THREE.SphereGeometry(0.8 * escala, 10, 8), copaMat);
+    copa2.position.set(0.6 * escala, 2.9 * escala, 0.3 * escala);
+    arbol.add(copa2);
+    const copa3 = new THREE.Mesh(new THREE.SphereGeometry(0.7 * escala, 10, 8), copaMat);
+    copa3.position.set(-0.5 * escala, 2.8 * escala, -0.2 * escala);
+    arbol.add(copa3);
+
+    arbol.position.set(x, 0, z);
+    return arbol;
+  }
+
+  exterior.add(crearArbol(-12, -28, 1.5));
+  exterior.add(crearArbol(-6, -30, 1.2));
+  exterior.add(crearArbol(0, -32, 1.6));
+  exterior.add(crearArbol(7, -29, 1.3));
+  exterior.add(crearArbol(13, -31, 1.4));
+  exterior.add(crearArbol(-18, -30, 1.1));
+
+  // Arbustos
+  for (let i = 0; i < 8; i++) {
+    const arb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.4 + Math.random()*0.3, 8, 6),
+      new THREE.MeshStandardMaterial({ color: 0x3a8a3a, roughness: 1 })
+    );
+    arb.position.set(-20 + i * 5 + Math.random()*2, 0.3, -22 - Math.random()*3);
+    exterior.add(arb);
+  }
+
+  // Nubes
+  function crearNube(x, y, z) {
+    const nube = new THREE.Group();
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, fog: false });
+    for (let i = 0; i < 4; i++) {
+      const s = new THREE.Mesh(new THREE.SphereGeometry(0.9 + Math.random()*0.5, 8, 6), mat);
+      s.position.set(i * 0.9 - 1.2, Math.random()*0.3, Math.random()*0.4);
+      nube.add(s);
+    }
+    nube.position.set(x, y, z);
+    return nube;
+  }
+  exterior.add(crearNube(-8, 18, -38));
+  exterior.add(crearNube(8, 20, -42));
+  exterior.add(crearNube(-20, 17, -40));
+
+  // Luz del sol direccional
+  const luzSol = new THREE.DirectionalLight(0xfff0c0, 1.3);
+  luzSol.position.set(-10, 15, -25);
+  luzSol.castShadow = true;
+  luzSol.shadow.mapSize.set(2048, 2048);
+  luzSol.shadow.camera.left = -10;
+  luzSol.shadow.camera.right = 10;
+  luzSol.shadow.camera.top = 10;
+  luzSol.shadow.camera.bottom = -10;
+  luzSol.shadow.camera.far = 60;
+  lab.add(luzSol);
+
+  return lab;
+}
+
+const laboratorio = crearLaboratorio();
+scene.add(laboratorio);
+
+// ============================================================
+// PANEL VR — TABLERO DE CONTROL TIPO PARED
 // ============================================================
 const panelVRGroup = new THREE.Group();
-panelVRGroup.position.set(1.0, 1.3, -0.4);
-panelVRGroup.visible = true;
+panelVRGroup.position.set(1.35, 1.35, -0.3);
+panelVRGroup.rotation.y = -Math.PI / 2;
+panelVRGroup.visible = false;
 scene.add(panelVRGroup);
 
-const PANEL_ANCHO = 1.7;
-const PANEL_ALTO = 1.0;
+const PANEL_ANCHO = 2.2;
+const PANEL_ALTO = 1.75;
+const PANEL_Z = 0.021;
 
 // Fondo
 const panelFondo = new THREE.Mesh(
-  new THREE.PlaneGeometry(PANEL_ANCHO, PANEL_ALTO),
-  new THREE.MeshBasicMaterial({
-    color: 0x081428,
-    transparent: true,
-    opacity: 0.95,
-    side: THREE.DoubleSide
+  new THREE.BoxGeometry(PANEL_ANCHO, PANEL_ALTO, 0.04),
+  new THREE.MeshStandardMaterial({
+    color: 0x0a1628,
+    metalness: 0.3,
+    roughness: 0.7,
+    emissive: 0x061020,
+    emissiveIntensity: 0.6
   })
 );
+panelFondo.position.z = -0.02;
 panelVRGroup.add(panelFondo);
 
-// Borde luminoso
-const panelBorde = new THREE.LineSegments(
-  new THREE.EdgesGeometry(new THREE.PlaneGeometry(PANEL_ANCHO, PANEL_ALTO)),
-  new THREE.LineBasicMaterial({ color: 0x22d3ee })
-);
-panelVRGroup.add(panelBorde);
+// Marco luminoso
+const marcoGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(PANEL_ANCHO, PANEL_ALTO, 0.04));
+const marco = new THREE.LineSegments(marcoGeo, new THREE.LineBasicMaterial({ color: 0x22d3ee }));
+panelVRGroup.add(marco);
+
+// -------- Helpers --------
+function crearTextoVR(texto, x, y, size, color, align) {
+  align = align || 'center';
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = color || '#22d3ee';
+  ctx.font = 'bold 64px Arial';
+  ctx.textAlign = align;
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = color || '#22d3ee';
+  ctx.shadowBlur = 14;
+  const xTex = align === 'left' ? 20 : (align === 'right' ? 1004 : 512);
+  ctx.fillText(texto, xTex, 64);
+  const tex = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  sprite.position.set(x, y, PANEL_Z + 0.002);
+  sprite.scale.set(size, size * 0.125, 1);
+  sprite.renderOrder = 10;
+  panelVRGroup.add(sprite);
+  return sprite;
+}
 
 function crearBotonVR(texto, x, y, w, h, color, onClick, fontSize) {
-  fontSize = fontSize || 40;
+  fontSize = fontSize || 44;
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 256;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+  const colHex = '#' + color.toString(16).padStart(6, '0');
+  ctx.fillStyle = colHex;
   ctx.fillRect(0, 0, 512, 256);
   ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 10;
-  ctx.strokeRect(8, 8, 496, 240);
+  ctx.lineWidth = 8;
+  ctx.strokeRect(6, 6, 500, 244);
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold ' + fontSize + 'px Arial';
   ctx.textAlign = 'center';
@@ -1495,239 +1737,233 @@ function crearBotonVR(texto, x, y, w, h, color, onClick, fontSize) {
   ctx.fillText(texto, 256, 128);
 
   const tex = new THREE.CanvasTexture(canvas);
-  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
-  const geo = new THREE.PlaneGeometry(w, h);
-  const btn = new THREE.Mesh(geo, mat);
-  btn.position.set(x, y, 0.003);
+  const mat = new THREE.MeshBasicMaterial({ map: tex });
+  const btn = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  btn.position.set(x, y, PANEL_Z);
   btn.userData.onClick = onClick;
+  btn.userData.esBoton = true;
   btn.userData.colorBase = color;
+  btn.userData.canvas = canvas;
+  btn.userData.ctx = ctx;
+  btn.userData.tex = tex;
   panelVRGroup.add(btn);
   return btn;
 }
 
-function crearTextoPanel(texto, x, y, size, color) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 128;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = color || '#22d3ee';
-  ctx.font = 'bold 60px Arial';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.shadowColor = color || '#22d3ee';
-  ctx.shadowBlur = 12;
-  ctx.fillText(texto, 512, 64);
-  const tex = new THREE.CanvasTexture(canvas);
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
-  sprite.position.set(x, y, 0.004);
-  sprite.scale.set(size, size * 0.125, 1);
-  panelVRGroup.add(sprite);
-  return sprite;
+// -------- SLIDER ARRASTRABLE --------
+function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, etiqueta) {
+  const grupo = new THREE.Group();
+  grupo.position.set(x, y, PANEL_Z);
+  grupo.userData.esSlider = true;
+
+  // Etiqueta
+  crearTextoVR(etiqueta, x, y + 0.085, 0.40, '#8fa3c0');
+
+  // Pista
+  const pista = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, 0.018),
+    new THREE.MeshBasicMaterial({ color: 0x1e293b })
+  );
+  pista.userData.esPista = true;
+  grupo.add(pista);
+
+  // Relleno activo
+  const relleno = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, 0.018),
+    new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.85 })
+  );
+  relleno.userData.esRelleno = true;
+  grupo.add(relleno);
+
+  // Perilla
+  const perilla = new THREE.Mesh(
+    new THREE.CircleGeometry(0.032, 24),
+    new THREE.MeshBasicMaterial({ color: 0xffffff })
+  );
+  perilla.userData.esPerilla = true;
+  grupo.add(perilla);
+
+  // Valor
+  const valorTxt = crearTextoVR('0', x + w/2 + 0.15, y, 0.30, '#4da3ff');
+  valorTxt.userData.esValorSlider = true;
+
+  grupo.userData.min = min;
+  grupo.userData.max = max;
+  grupo.userData.step = step;
+  grupo.userData.w = w;
+  grupo.userData.valor = valorInicial;
+  grupo.userData.onChange = onChange;
+  grupo.userData.perilla = perilla;
+  grupo.userData.relleno = relleno;
+  grupo.userData.valorTxt = valorTxt;
+
+  function actualizarVisual() {
+    const t = (grupo.userData.valor - min) / (max - min);
+    perilla.position.x = -w/2 + t * w;
+    perilla.position.z = 0.001;
+    relleno.scale.x = Math.max(0.001, t);
+    relleno.position.x = -w/2 + (t * w) / 2;
+    relleno.position.z = 0.0005;
+
+    // Redibujar el texto del valor
+    const cv = valorTxt.material.map.image;
+    const c2 = cv.getContext('2d');
+    c2.clearRect(0, 0, cv.width, cv.height);
+    c2.fillStyle = '#4da3ff';
+    c2.font = 'bold 64px Arial';
+    c2.textAlign = 'center';
+    c2.textBaseline = 'middle';
+    c2.shadowColor = '#4da3ff';
+    c2.shadowBlur = 14;
+    c2.fillText(grupo.userData.valor.toFixed(step < 1 ? 1 : 0), 512, 64);
+    valorTxt.material.map.needsUpdate = true;
+  }
+  grupo.userData.actualizarVisual = actualizarVisual;
+  actualizarVisual();
+
+  panelVRGroup.add(grupo);
+  return grupo;
 }
 
-// Fila 1: Título
-crearTextoPanel('⚡ LEY DE BIOT-SAVART', 0, 0.42, 0.9, '#22d3ee');
+// ============================================================
+// DISTRIBUCIÓN DEL TABLERO
+// ============================================================
+crearTextoVR('⚡ LEY DE BIOT-SAVART', 0, PANEL_ALTO/2 - 0.10, 1.0, '#22d3ee');
 
-// Fila 2: Corriente | Posición
-crearTextoPanel('Corriente (A)', -0.55, 0.30, 0.26, '#8fa3c0');
-crearBotonVR('−', -0.72, 0.20, 0.13, 0.10, 0xdc2626, () => {
-  estado.I = Math.max(0, estado.I - 2);
-  document.getElementById('corriente').value = estado.I;
-  document.getElementById('valI').textContent = estado.I.toFixed(1) + ' A';
-  document.getElementById('hudI').textContent = estado.I.toFixed(1);
+// --- Sliders ---
+const sliderI_VR = crearSliderVR(-0.05, 0.50, 1.5, estado.I, 0, 100, 0.5, 0x4da3ff, (v) => {
+  estado.I = v;
+  document.getElementById('corriente').value = v;
+  document.getElementById('valI').textContent = v.toFixed(1) + ' A';
+  document.getElementById('hudI').textContent = v.toFixed(1);
   actualizarCampo();
   actualizarAudio();
-  actualizarPanelVR();
-}, 90);
-crearBotonVR('+', -0.55, 0.20, 0.13, 0.10, 0x059669, () => {
-  estado.I = Math.min(100, estado.I + 2);
-  document.getElementById('corriente').value = estado.I;
-  document.getElementById('valI').textContent = estado.I.toFixed(1) + ' A';
-  document.getElementById('hudI').textContent = estado.I.toFixed(1);
-  actualizarCampo();
-  actualizarAudio();
-  actualizarPanelVR();
-}, 90);
-crearBotonVR('MAX', -0.38, 0.20, 0.13, 0.10, 0x9333ea, () => {
-  estado.I = 100;
-  document.getElementById('corriente').value = estado.I;
-  document.getElementById('valI').textContent = estado.I.toFixed(1) + ' A';
-  document.getElementById('hudI').textContent = estado.I.toFixed(1);
-  actualizarCampo();
-  actualizarAudio();
-  actualizarPanelVR();
-}, 40);
+}, 'Corriente I (A)');
 
-crearTextoPanel('Posición (mm)', 0.55, 0.30, 0.26, '#8fa3c0');
-crearBotonVR('−', 0.38, 0.20, 0.13, 0.10, 0xdc2626, () => {
-  estado.s_mm = Math.max(5, estado.s_mm - 10);
-  document.getElementById('posicion').value = estado.s_mm;
-  document.getElementById('valS').textContent = estado.s_mm.toFixed(0) + ' mm';
-  document.getElementById('hudS').textContent = estado.s_mm.toFixed(1);
+const sliderS_VR = crearSliderVR(-0.05, 0.22, 1.5, estado.s_mm, 5, 300, 1, 0x10b981, (v) => {
+  estado.s_mm = v;
+  document.getElementById('posicion').value = v;
+  document.getElementById('valS').textContent = v.toFixed(0) + ' mm';
+  document.getElementById('hudS').textContent = v.toFixed(1);
   actualizarPosicionSonda();
   actualizarLectura();
-  actualizarPanelVR();
-}, 90);
-crearBotonVR('+', 0.55, 0.20, 0.13, 0.10, 0x059669, () => {
-  estado.s_mm = Math.min(300, estado.s_mm + 10);
-  document.getElementById('posicion').value = estado.s_mm;
-  document.getElementById('valS').textContent = estado.s_mm.toFixed(0) + ' mm';
-  document.getElementById('hudS').textContent = estado.s_mm.toFixed(1);
-  actualizarPosicionSonda();
-  actualizarLectura();
-  actualizarPanelVR();
-}, 90);
-crearBotonVR('MIN', 0.72, 0.20, 0.13, 0.10, 0x9333ea, () => {
-  estado.s_mm = 5;
-  document.getElementById('posicion').value = estado.s_mm;
-  document.getElementById('valS').textContent = estado.s_mm.toFixed(0) + ' mm';
-  document.getElementById('hudS').textContent = estado.s_mm.toFixed(1);
-  actualizarPosicionSonda();
-  actualizarLectura();
-  actualizarPanelVR();
-}, 40);
+}, 'Posición sonda (mm)');
 
-// Fila 3: Elemento | Amplificación | Sonido
-crearBotonVR('VARILLA ⟷ ESPIRA', -0.55, 0.03, 0.55, 0.10, 0x2563eb, () => {
+const sliderAmp_VR = crearSliderVR(-0.05, -0.06, 1.5, estado.amplificacion, 1, 500, 1, 0xf59e0b, (v) => {
+  estado.amplificacion = v;
+  document.getElementById('amplificacion').value = v;
+  document.getElementById('valAmp').textContent = v;
+  crearOrbitas();
+  crearLineas();
+  regenerarParticulas();
+}, 'Amplificación visual');
+
+// --- Botones fila 1 ---
+crearBotonVR('⟷ VARILLA/ESPIRA', -0.55, -0.25, 0.95, 0.10, 0x2563eb, () => {
   cambiarElemento();
-  actualizarPanelVR();
 }, 30);
 
-crearTextoPanel('Amp', 0.40, 0.09, 0.18, '#8fa3c0');
-crearBotonVR('−', 0.32, 0.03, 0.11, 0.10, 0xdc2626, () => {
-  estado.amplificacion = Math.max(1, estado.amplificacion - 10);
-  document.getElementById('amplificacion').value = estado.amplificacion;
-  document.getElementById('valAmp').textContent = estado.amplificacion;
-  crearOrbitas(); crearLineas(); regenerarParticulas();
-  actualizarPanelVR();
-}, 90);
-crearBotonVR('+', 0.45, 0.03, 0.11, 0.10, 0x059669, () => {
-  estado.amplificacion = Math.min(500, estado.amplificacion + 10);
-  document.getElementById('amplificacion').value = estado.amplificacion;
-  document.getElementById('valAmp').textContent = estado.amplificacion;
-  crearOrbitas(); crearLineas(); regenerarParticulas();
-  actualizarPanelVR();
-}, 90);
-
-crearTextoPanel('Sonido', 0.70, 0.09, 0.18, '#8fa3c0');
-crearBotonVR('🔊', 0.68, 0.03, 0.15, 0.10, 0xf59e0b, () => {
+const btnSonidoVR = crearBotonVR('🔊 SONIDO', 0.62, -0.25, 0.60, 0.10, 0xf59e0b, () => {
   toggleSonido();
-  actualizarPanelVR();
-}, 55);
+  const ctx = btnSonidoVR.userData.ctx;
+  ctx.fillStyle = audioActivo ? '#059669' : '#f59e0b';
+  ctx.fillRect(0, 0, 512, 256);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 8; ctx.strokeRect(6,6,500,244);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 40px Arial';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(audioActivo ? '🔊 ACTIVO' : '🔇 SILENCIO', 256, 128);
+  btnSonidoVR.userData.tex.needsUpdate = true;
+}, 34);
 
-// Fila 4: Toggles visuales
-crearTextoPanel('Zona', -0.70, -0.13, 0.16, '#8fa3c0');
-crearBotonVR('Z', -0.70, -0.22, 0.12, 0.09, 0x0891b2, () => {
-  estado.mostrarZona = !estado.mostrarZona;
-  zonaGroup.visible = estado.mostrarZona;
-  document.getElementById('chkZona').checked = estado.mostrarZona;
-  actualizarPanelVR();
-}, 50);
+// --- Toggles ---
+function crearToggleVR(texto, x, y, activo, onClick) {
+  const btn = crearBotonVR(texto, x, y, 0.40, 0.085, activo ? 0x0891b2 : 0x334155, () => {
+    const nuevo = !btn.userData.activo;
+    btn.userData.activo = nuevo;
+    onClick(nuevo);
+    actualizarToggleVisual(btn, texto, nuevo);
+  }, 24);
+  btn.userData.activo = activo;
+  btn.userData.textoBase = texto;
+  return btn;
+}
 
-crearTextoPanel('Orbit', -0.46, -0.13, 0.16, '#8fa3c0');
-crearBotonVR('O', -0.46, -0.22, 0.12, 0.09, 0x0891b2, () => {
-  estado.mostrarVectores = !estado.mostrarVectores;
-  vectoresGroup.visible = estado.mostrarVectores;
-  document.getElementById('chkVectores').checked = estado.mostrarVectores;
-  if (estado.mostrarVectores) crearOrbitas();
-  actualizarPanelVR();
-}, 50);
+function actualizarToggleVisual(btn, texto, activo) {
+  const ctx = btn.userData.ctx;
+  ctx.fillStyle = activo ? '#0891b2' : '#334155';
+  ctx.fillRect(0, 0, 512, 256);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 8; ctx.strokeRect(6,6,500,244);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 26px Arial';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(texto + (activo ? ' ✓' : ' ✗'), 256, 128);
+  btn.userData.tex.needsUpdate = true;
+}
 
-crearTextoPanel('Líneas', -0.22, -0.13, 0.16, '#8fa3c0');
-crearBotonVR('L', -0.22, -0.22, 0.12, 0.09, 0x0891b2, () => {
-  estado.mostrarLineas = !estado.mostrarLineas;
-  lineasGroup.visible = estado.mostrarLineas;
-  document.getElementById('chkLineas').checked = estado.mostrarLineas;
-  if (estado.mostrarLineas) { crearLineas(); regenerarParticulas(); }
-  actualizarPanelVR();
-}, 50);
-
-crearTextoPanel('Partíc', 0.02, -0.13, 0.16, '#8fa3c0');
-crearBotonVR('P', 0.02, -0.22, 0.12, 0.09, 0x0891b2, () => {
-  estado.mostrarParticulas = !estado.mostrarParticulas;
-  particulasGroup.visible = estado.mostrarParticulas;
-  document.getElementById('chkParticulas').checked = estado.mostrarParticulas;
-  if (estado.mostrarParticulas) regenerarParticulas();
-  actualizarPanelVR();
-}, 50);
-
-crearTextoPanel('Límite', 0.26, -0.13, 0.16, '#8fa3c0');
-crearBotonVR('M', 0.26, -0.22, 0.12, 0.09, 0x0891b2, () => {
-  estado.mostrarLimite = !estado.mostrarLimite;
-  limiteGroup.visible = estado.mostrarLimite;
-  document.getElementById('chkLimite').checked = estado.mostrarLimite;
+crearToggleVR('Zona', -0.85, -0.43, estado.mostrarZona, (v) => {
+  estado.mostrarZona = v; zonaGroup.visible = v;
+  document.getElementById('chkZona').checked = v;
+});
+crearToggleVR('Órbitas', -0.42, -0.43, estado.mostrarVectores, (v) => {
+  estado.mostrarVectores = v; vectoresGroup.visible = v;
+  document.getElementById('chkVectores').checked = v;
+  if (v) crearOrbitas();
+});
+crearToggleVR('Líneas', 0.01, -0.43, estado.mostrarLineas, (v) => {
+  estado.mostrarLineas = v; lineasGroup.visible = v;
+  document.getElementById('chkLineas').checked = v;
+  if (v) { crearLineas(); regenerarParticulas(); }
+});
+crearToggleVR('Partíc.', 0.44, -0.43, estado.mostrarParticulas, (v) => {
+  estado.mostrarParticulas = v; particulasGroup.visible = v;
+  document.getElementById('chkParticulas').checked = v;
+  if (v) regenerarParticulas();
+});
+crearToggleVR('Límite', 0.85, -0.43, estado.mostrarLimite, (v) => {
+  estado.mostrarLimite = v; limiteGroup.visible = v;
+  document.getElementById('chkLimite').checked = v;
   crearAnilloLimite();
-  actualizarPanelVR();
-}, 50);
+});
 
-crearTextoPanel('Rotar', 0.50, -0.13, 0.16, '#8fa3c0');
-crearBotonVR('R', 0.50, -0.22, 0.12, 0.09, 0x0891b2, () => {
-  controls.autoRotate = !controls.autoRotate;
-  document.getElementById('chkRotacion').checked = controls.autoRotate;
-  actualizarPanelVR();
-}, 50);
-
-// Fila 5: Acciones
-crearBotonVR('📌 GUARDAR', -0.62, -0.40, 0.35, 0.09, 0x059669, () => {
+// --- Acciones ---
+crearBotonVR('📌 GUARDAR', -0.72, -0.62, 0.42, 0.09, 0x059669, () => {
   const B = actualizarLectura();
   agregarFila(estado.elemento, estado.I, estado.s_mm, B);
   mostrarToast('✅ Guardado');
-}, 32);
+}, 28);
 
-crearBotonVR('B vs I', -0.24, -0.40, 0.28, 0.09, 0x2563eb, () => {
-  const sFija = estado.s_mm;
-  const s_cm = smmToCm(sFija);
-  for (let I = 2; I <= 30; I += 2) {
-    const p = new THREE.Vector3(s_cm, ALTURA_EJE_CM, 0);
-    const B = calcularB(p, estado.segmentos, I).length() * 1000;
-    agregarFila(estado.elemento, I, sFija, B);
-  }
-  mostrarToast('🔄 B vs I');
-}, 32);
+crearBotonVR('B vs I', -0.28, -0.62, 0.30, 0.09, 0x2563eb, () => {
+  document.getElementById('btnBarridoI').click();
+}, 28);
 
-crearBotonVR('B vs s', 0.10, -0.40, 0.28, 0.09, 0x2563eb, () => {
-  const IFija = estado.I;
-  for (let s_mm = 5; s_mm <= 300; s_mm += 5) {
-    const s_cm = smmToCm(s_mm);
-    const p = new THREE.Vector3(s_cm, ALTURA_EJE_CM, 0);
-    const B = calcularB(p, estado.segmentos, IFija).length() * 1000;
-    agregarFila(estado.elemento, IFija, s_mm, B);
-  }
-  mostrarToast('🔄 B vs s');
-}, 32);
+crearBotonVR('B vs s', 0.06, -0.62, 0.30, 0.09, 0x2563eb, () => {
+  document.getElementById('btnBarridoS').click();
+}, 28);
 
-crearBotonVR('📄 REPORTE', 0.52, -0.40, 0.50, 0.09, 0x9333ea, () => {
+crearBotonVR('📄 REPORTE', 0.60, -0.62, 0.55, 0.09, 0x9333ea, () => {
   document.getElementById('btnReporte').click();
-}, 30);
-
-crearBotonVR('🗑️ LIMPIAR', 0.10, -0.52, 0.42, 0.08, 0xdc2626, () => {
-  datosCapturados.length = 0;
-  document.getElementById('tablaBody').innerHTML = '';
-  mostrarToast('🗑️ Tabla limpiada');
 }, 28);
 
-crearBotonVR('🔄 RESET', -0.55, -0.52, 0.42, 0.08, 0x0891b2, () => {
-  // Reset suave de valores
-  estado.I = 15;
-  estado.s_mm = 100;
-  estado.amplificacion = 50;
-  document.getElementById('corriente').value = estado.I;
-  document.getElementById('valI').textContent = estado.I.toFixed(1) + ' A';
-  document.getElementById('hudI').textContent = estado.I.toFixed(1);
-  document.getElementById('posicion').value = estado.s_mm;
-  document.getElementById('valS').textContent = estado.s_mm.toFixed(0) + ' mm';
-  document.getElementById('hudS').textContent = estado.s_mm.toFixed(1);
-  document.getElementById('amplificacion').value = estado.amplificacion;
-  document.getElementById('valAmp').textContent = estado.amplificacion;
-  actualizarPosicionSonda();
-  actualizarCampo();
-  actualizarAudio();
-  actualizarPanelVR();
-  mostrarToast('🔄 Valores reseteados');
-}, 28);
+crearBotonVR('🗑️ LIMPIAR', -0.45, -0.73, 0.42, 0.08, 0xdc2626, () => {
+  document.getElementById('btnLimpiar').click();
+}, 24);
 
-// Fila 6: Display en vivo
-const displayLecturaVR = crearTextoPanel('B: 0.0000 mT', 0, -0.65, 1.2, '#4da3ff');
+crearBotonVR('🔄 RESET', 0.10, -0.73, 0.42, 0.08, 0x0891b2, () => {
+  document.getElementById('corriente').value = 15;
+  document.getElementById('corriente').dispatchEvent(new Event('input'));
+  document.getElementById('posicion').value = 100;
+  document.getElementById('posicion').dispatchEvent(new Event('input'));
+  document.getElementById('amplificacion').value = 50;
+  document.getElementById('amplificacion').dispatchEvent(new Event('input'));
+  sliderI_VR.userData.valor = 15; sliderI_VR.userData.actualizarVisual();
+  sliderS_VR.userData.valor = 100; sliderS_VR.userData.actualizarVisual();
+  sliderAmp_VR.userData.valor = 50; sliderAmp_VR.userData.actualizarVisual();
+  mostrarToast('🔄 Reset');
+}, 24);
+
+// --- Display de lectura ---
+const displayLecturaVR = crearTextoVR('B = 0.0000 mT   [VARILLA]', 0, -0.87, 1.3, '#4da3ff');
 
 function actualizarPanelVR() {
   const B = actualizarLectura();
@@ -1735,15 +1971,13 @@ function actualizarPanelVR() {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = '#4da3ff';
-  ctx.font = 'bold 52px Courier New';
+  ctx.font = 'bold 60px Courier New';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.shadowColor = '#4da3ff';
-  ctx.shadowBlur = 18;
-  const elementoStr = estado.elemento === 'axial' ? 'VARILLA' : 'ESPIRA';
-  const sonidoStr = audioActivo ? '🔊' : '🔇';
-  const txt = `${elementoStr} | B:${B.toFixed(3)}mT | I:${estado.I.toFixed(0)}A | s:${estado.s_mm.toFixed(0)}mm ${sonidoStr}`;
-  ctx.fillText(txt, 512, 64);
+  ctx.shadowBlur = 20;
+  const elem = estado.elemento === 'axial' ? 'VARILLA' : 'ESPIRA';
+  ctx.fillText(`B = ${B.toFixed(4)} mT   [${elem}]`, 512, 64);
   displayLecturaVR.material.map.needsUpdate = true;
 }
 
@@ -1753,32 +1987,97 @@ function actualizarPanelVR() {
 const raycaster = new THREE.Raycaster();
 const tempMatrix = new THREE.Matrix4();
 
-function manejarClicRayo(controller) {
+let sliderActivo = null;
+
+function obtenerHits(controller) {
   tempMatrix.identity().extractRotation(controller.matrixWorld);
   raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
   raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-  raycaster.far = 20;
+  raycaster.far = 10;
 
-  const intersects = raycaster.intersectObjects(panelVRGroup.children, true);
-
-  if (intersects.length > 0) {
-    for (const hit of intersects) {
-      let obj = hit.object;
-      while (obj && obj !== panelVRGroup) {
-        if (obj.userData && typeof obj.userData.onClick === 'function') {
-          // Feedback: destello blanco
-          const mat = obj.material;
-          if (mat && mat.color) {
-            const original = mat.color.getHex();
-            mat.color.setHex(0xffffff);
-            setTimeout(() => { if (mat) mat.color.setHex(original); }, 100);
-          }
-          obj.userData.onClick();
-          return;
-        }
-        obj = obj.parent;
-      }
+  const interactivos = [];
+  panelVRGroup.traverse(o => {
+    if (o.userData.esBoton || o.userData.esPista || o.userData.esPerilla || o.userData.esRelleno) {
+      interactivos.push(o);
     }
+  });
+  return raycaster.intersectObjects(interactivos, false);
+}
+
+function manejarSelectStart(controller) {
+  const hits = obtenerHits(controller);
+  if (hits.length === 0) return;
+
+  const hit = hits[0];
+  const obj = hit.object;
+
+  // ¿Es un slider?
+  let sliderGrupo = obj;
+  while (sliderGrupo && !sliderGrupo.userData.esSlider) sliderGrupo = sliderGrupo.parent;
+
+  if (sliderGrupo && sliderGrupo.userData.esSlider) {
+    sliderActivo = { grupo: sliderGrupo, controller };
+    aplicarSliderDesdeHit(sliderGrupo, hit.point);
+    return;
+  }
+
+  // ¿Es un botón?
+  let btn = obj;
+  while (btn && btn !== panelVRGroup && !btn.userData.esBoton) btn = btn.parent;
+  if (btn && btn.userData.esBoton) {
+    const mat = btn.material;
+    if (mat && mat.color) {
+      const orig = mat.color.getHex();
+      mat.color.setHex(0xffffff);
+      setTimeout(() => { if (mat && mat.color) mat.color.setHex(orig); }, 120);
+    }
+    if (typeof btn.userData.onClick === 'function') btn.userData.onClick();
+  }
+}
+
+function manejarSelectEnd() {
+  sliderActivo = null;
+}
+
+function aplicarSliderDesdeHit(grupo, puntoMundo) {
+  const local = grupo.worldToLocal(puntoMundo.clone());
+  const w = grupo.userData.w;
+  let t = (local.x + w/2) / w;
+  t = Math.max(0, Math.min(1, t));
+  let v = grupo.userData.min + t * (grupo.userData.max - grupo.userData.min);
+  const st = grupo.userData.step;
+  v = Math.round(v / st) * st;
+  v = Math.max(grupo.userData.min, Math.min(grupo.userData.max, v));
+  grupo.userData.valor = v;
+  grupo.userData.actualizarVisual();
+  if (typeof grupo.userData.onChange === 'function') grupo.userData.onChange(v);
+}
+
+function actualizarSliderArrastrando() {
+  if (!sliderActivo) return;
+  const { grupo, controller } = sliderActivo;
+  tempMatrix.identity().extractRotation(controller.matrixWorld);
+  raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+  raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+  // Plano del panel en coordenadas mundiales
+  const normalMundo = new THREE.Vector3(0, 0, 1).applyQuaternion(panelVRGroup.quaternion);
+  const puntoPanel = panelVRGroup.localToWorld(new THREE.Vector3(0, 0, PANEL_Z));
+  const plano = new THREE.Plane().setFromNormalAndCoplanarPoint(normalMundo, puntoPanel);
+
+  const punto = new THREE.Vector3();
+  if (raycaster.ray.intersectPlane(plano, punto)) {
+    const local = grupo.worldToLocal(punto.clone());
+    const w = grupo.userData.w;
+    let t = (local.x + w/2) / w;
+    t = Math.max(0, Math.min(1, t));
+    let v = grupo.userData.min + t * (grupo.userData.max - grupo.userData.min);
+    const st = grupo.userData.step;
+    v = Math.round(v / st) * st;
+    v = Math.max(grupo.userData.min, Math.min(grupo.userData.max, v));
+    grupo.userData.valor = v;
+    grupo.userData.actualizarVisual();
+    if (typeof grupo.userData.onChange === 'function') grupo.userData.onChange(v);
   }
 }
 
@@ -1786,15 +2085,13 @@ function manejarClicRayo(controller) {
 // SESIÓN XR
 // ============================================================
 renderer.xr.addEventListener('sessionstart', () => {
-  xrRig.position.set(0, 0, 0);
+  xrRig.position.set(0.2, 0, 0.4);
+  xrRig.rotation.y = -Math.PI / 2;
+
   controls.enabled = false;
   document.getElementById('panel').style.display = 'none';
   document.getElementById('hud').style.display = 'none';
   document.getElementById('aviso').style.display = 'none';
-
-  // Panel: pizarra vertical al lado derecho, mirando al usuario
-  panelVRGroup.position.set(1.0, 1.3, -0.4);
-  panelVRGroup.lookAt(0, 1.3, 0);
   panelVRGroup.visible = true;
   actualizarPanelVR();
 });
@@ -1804,6 +2101,8 @@ renderer.xr.addEventListener('sessionend', () => {
   document.getElementById('panel').style.display = 'block';
   document.getElementById('hud').style.display = 'block';
   document.getElementById('aviso').style.display = 'block';
+  panelVRGroup.visible = false;
+  sliderActivo = null;
 });
 
 function configurarControlador(index) {
@@ -1829,7 +2128,10 @@ renderer.xr.getController(0).addEventListener('selectstart', () => {
 
 // Gatillo derecho: interactuar con el panel
 renderer.xr.getController(1).addEventListener('selectstart', () => {
-  manejarClicRayo(renderer.xr.getController(1));
+  manejarSelectStart(renderer.xr.getController(1));
+});
+renderer.xr.getController(1).addEventListener('selectend', () => {
+  manejarSelectEnd();
 });
 
 function procesarControlesXR() {
@@ -1849,6 +2151,8 @@ function procesarControlesXR() {
         document.getElementById('hudS').textContent = estado.s_mm.toFixed(1);
         actualizarPosicionSonda();
         actualizarLectura();
+        sliderS_VR.userData.valor = estado.s_mm;
+        sliderS_VR.userData.actualizarVisual();
       }
     }
 
@@ -1861,6 +2165,8 @@ function procesarControlesXR() {
         document.getElementById('hudI').textContent = estado.I.toFixed(1);
         actualizarCampo();
         actualizarAudio();
+        sliderI_VR.userData.valor = estado.I;
+        sliderI_VR.userData.actualizarVisual();
       }
     }
   }
@@ -1924,6 +2230,8 @@ document.getElementById('corriente').addEventListener('input', e => {
   document.getElementById('hudI').textContent = estado.I.toFixed(1);
   actualizarCampo();
   actualizarAudio();
+  sliderI_VR.userData.valor = estado.I;
+  sliderI_VR.userData.actualizarVisual();
 });
 
 document.getElementById('amplificacion').addEventListener('input', e => {
@@ -1932,6 +2240,8 @@ document.getElementById('amplificacion').addEventListener('input', e => {
   crearOrbitas();
   crearLineas();
   regenerarParticulas();
+  sliderAmp_VR.userData.valor = estado.amplificacion;
+  sliderAmp_VR.userData.actualizarVisual();
 });
 
 document.getElementById('posicion').addEventListener('input', e => {
@@ -1940,6 +2250,8 @@ document.getElementById('posicion').addEventListener('input', e => {
   document.getElementById('hudS').textContent = estado.s_mm.toFixed(1);
   actualizarPosicionSonda();
   actualizarLectura();
+  sliderS_VR.userData.valor = estado.s_mm;
+  sliderS_VR.userData.actualizarVisual();
 });
 
 document.getElementById('chkZona').addEventListener('change', e => { estado.mostrarZona = e.target.checked; zonaGroup.visible = estado.mostrarZona; });
@@ -2220,9 +2532,6 @@ document.getElementById('btnReporte').addEventListener('click', async () => {
 // ============================================================
 // LOOP
 // ============================================================
-let lastTime = performance.now();
-let timeAcc = 0;
-
 function animate() {
   const now = performance.now();
   const dt = Math.min((now - lastTime) / 1000, 0.1);
@@ -2231,6 +2540,7 @@ function animate() {
 
   animarOrbitas(dt);
   procesarControlesXR();
+  actualizarSliderArrastrando();
 
   puntaSonda.material.emissiveIntensity = 0.6 + Math.sin(timeAcc * 3) * 0.3 * Math.min(estado.I / 30, 1);
 
