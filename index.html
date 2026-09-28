@@ -605,13 +605,6 @@ posteSonda.position.y = ((ALTURA_EJE_CM/100 - 0.011)/2 + 0.011) * ESCALA_MUNDO;
 posteSonda.castShadow = true;
 sondaGroup.add(posteSonda);
 
-const brazoSonda = new THREE.Mesh(
-  new THREE.BoxGeometry(0.016 * ESCALA_MUNDO, 0.0025 * ESCALA_MUNDO, 0.0025 * ESCALA_MUNDO),
-  new THREE.MeshStandardMaterial({ color: 0x6a7a8c, metalness: 0.8, roughness: 0.3 })
-);
-brazoSonda.position.set(-0.008 * ESCALA_MUNDO, ALTURA_EJE_CM/100 * ESCALA_MUNDO, 0);
-brazoSonda.castShadow = true;
-sondaGroup.add(brazoSonda);
 
 const puntaSonda = new THREE.Mesh(
   new THREE.SphereGeometry(0.0022 * ESCALA_MUNDO, 12, 12),
@@ -620,7 +613,7 @@ const puntaSonda = new THREE.Mesh(
     metalness: 0.5, roughness: 0.3
   })
 );
-puntaSonda.position.set(-0.016 * ESCALA_MUNDO, ALTURA_EJE_CM/100 * ESCALA_MUNDO, 0);
+puntaSonda.position.set(0 * ESCALA_MUNDO, ALTURA_EJE_CM/100 * ESCALA_MUNDO, 0);
 sondaGroup.add(puntaSonda);
 
 scene.add(sondaGroup);
