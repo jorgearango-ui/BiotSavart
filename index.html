@@ -116,8 +116,8 @@
 
   <label>Elemento en el origen</label>
   <select id="elemento">
-    <option value="axial">Varilla perpendicular (axial)</option>
-    <option value="tangencial">Espira circular (tangencial)</option>
+    <option value="axial">Varilla recta (sonda perpendicular)</option>
+    <option value="tangencial">Espira circular (sonda en el eje)</option>
   </select>
 
   <label>Corriente I <span class="valor" id="valI">15.0 A</span></label>
@@ -132,9 +132,9 @@
   <input type="range" id="posicion" min="5" max="300" value="100" step="1">
 
   <div class="leyenda">
-    <span><i style="background:#10b981"></i>0–50 mm útil</span>
-    <span><i style="background:#f59e0b"></i>50–150 mm débil</span>
-    <span><i style="background:#ef4444"></i>&gt;150 mm ruido</span>
+    <span><i style="background:#10b981"></i>0–50 mm zona cercana</span>
+    <span><i style="background:#f59e0b"></i>50–150 mm intermedia</span>
+    <span><i style="background:#ef4444"></i>&gt;150 mm lejana (B muy débil)</span>
   </div>
 
   <div class="seccion-titulo">Visualización</div>
@@ -191,12 +191,12 @@
 <script type="importmap">
 {
   "imports": {
-    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
   }
 }
 </script>
-<script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
 
 <script type="module">
 import * as THREE from 'three';
@@ -230,6 +230,15 @@ const ESCALA_MUNDO = 4.5;
 const OFFSET_X = -(CARRIL_LARGO_CM / 2 / 100) * ESCALA_MUNDO;
 const OFFSET_Y = 0.95;
 const OFFSET_Z = -0.7;
+
+function liberar(obj) {
+  if (obj.geometry) obj.geometry.dispose();
+  const m = obj.material;
+  if (m) {
+    if (m.map) m.map.dispose();
+    m.dispose();
+  }
+}
 
 function posMundo(x, y, z) {
   return new THREE.Vector3(
@@ -698,6 +707,7 @@ const estado = {
 function smmToCm(mm) { return mm / 10; }
 
 const datosCapturados = [];
+let campoSucio = false;
 
 // ============================================================
 // GRUPOS
@@ -716,11 +726,15 @@ let orbitalesData = [];
 // ============================================================
 // ZONA DE INFLUENCIA
 // ============================================================
+let zonaElemento = null;
 function crearZonaInfluencia() {
+  // La zona solo depende del elemento, no de I: no se reconstruye si no cambió
+  if (zonaElemento === estado.elemento && zonaGroup.children.length) return;
+  zonaElemento = estado.elemento;
   while (zonaGroup.children.length) {
     const c = zonaGroup.children[0];
     zonaGroup.remove(c);
-    if (c.geometry) c.geometry.dispose();
+    liberar(c);
   }
   zonaShells = [];
 
@@ -1073,9 +1087,9 @@ function crearMaterialLinea() {
   });
 }
 
-// ==================== CAMBIO CLAVE ====================
-// La varilla ahora genera 10 grupos de líneas de campo a lo
-// largo del eje Z (antes eran solo 5).
+// Material único compartido por todas las líneas de campo
+const materialLineaCompartido = crearMaterialLinea();
+
 function crearLineas() {
   while (lineasGroup.children.length) {
     const c = lineasGroup.children[0];
@@ -1087,8 +1101,7 @@ function crearLineas() {
   const semillas = [];
   if (estado.elemento === 'axial') {
     const N = 12;
-    // Antes: [-4,-2,0,2,4]  →  5 valores
-    // Ahora: 10 valores uniformemente distribuidos entre -5 y 5
+    // 10 valores de z uniformemente distribuidos entre -5 y 5 cm
     const N_LINEAS_Z = 10;
     const Z_MIN = -5, Z_MAX = 5;
     const valoresZ = [];
@@ -1122,7 +1135,7 @@ function crearLineas() {
       const pts = trazarLinea(semilla, signo);
       if (pts.length > 3) {
         const geo = crearGeometriaLinea(pts);
-        if (geo) lineasGroup.add(new THREE.Line(geo, crearMaterialLinea()));
+        if (geo) lineasGroup.add(new THREE.Line(geo, materialLineaCompartido));
       }
     }
   });
@@ -1276,7 +1289,7 @@ function crearAnilloLimite() {
   while (limiteGroup.children.length) {
     const c = limiteGroup.children[0];
     limiteGroup.remove(c);
-    if (c.geometry) c.geometry.dispose();
+    liberar(c);
   }
   if (!estado.mostrarLimite) return;
 
@@ -1314,6 +1327,16 @@ function teslametroPosicionLogica() {
   return new THREE.Vector3(x_cm, y_cm, z_cm);
 }
 
+// Distancia real de la sonda (mm): usa la posición del teslámetro si está agarrado
+function sActual_mm() {
+  if (!estado.teslametroAgarrado) return estado.s_mm;
+  const p = teslametroPosicionLogica();
+  const s_cm = estado.elemento === 'axial'
+    ? Math.hypot(p.x, p.y - ALTURA_EJE_CM)
+    : Math.abs(p.x);
+  return s_cm * 10;
+}
+
 function calcularB_Actual() {
   if (estado.teslametroAgarrado) {
     const punto = teslametroPosicionLogica();
@@ -1333,12 +1356,17 @@ function actualizarCampo() {
   haloVarilla.material.opacity = estado.elemento === 'axial' ? intensidadHalo * 0.35 : 0;
   haloEspira.material.opacity = estado.elemento === 'tangencial' ? intensidadHalo * 0.35 : 0;
 
+  actualizarLectura();
+  // La reconstrucción pesada se agrupa: una sola vez por frame (también en VR)
+  campoSucio = true;
+}
+
+function reconstruirCampo() {
   crearZonaInfluencia();
   crearOrbitas();
   crearLineas();
   regenerarParticulas();
   crearAnilloLimite();
-  actualizarLectura();
 }
 
 function actualizarLectura() {
@@ -1996,7 +2024,7 @@ crearToggleVR('Límite',      1.10, -0.58, estado.mostrarLimite,     (v) => { es
 
 crearBotonVR('📌 GUARDAR', -1.00, -0.76, 0.50, 0.09, 0x059669, () => {
   const B = actualizarLectura();
-  agregarFila(estado.elemento, estado.I, estado.s_mm, B);
+  agregarFila(estado.elemento, estado.I, sActual_mm(), B);
   mostrarToast('✅ Guardado');
 }, 100);
 
@@ -2191,7 +2219,7 @@ function configurarSelectStart(controller) {
     const hand = controller.userData.handedness;
     if (hand === 'left') {
       const B = actualizarLectura();
-      agregarFila(estado.elemento, estado.I, estado.s_mm, B);
+      agregarFila(estado.elemento, estado.I, sActual_mm(), B);
       mostrarToast('✅ Medición guardada');
     } else if (hand === 'right') {
       manejarSelectStart(controller);
@@ -2250,20 +2278,19 @@ function procesarControlesXR() {
   }
 }
 
-function cambiarElemento() {
-  estado.elemento = estado.elemento === 'axial' ? 'tangencial' : 'axial';
-  if (estado.elemento === 'axial') {
-    varillaGroup.visible = true;
-    espiraGroup.visible = false;
-    estado.segmentos = segmentosVarilla();
-  } else {
-    varillaGroup.visible = false;
-    espiraGroup.visible = true;
-    estado.segmentos = segmentosEspira();
-  }
-  document.getElementById('elemento').value = estado.elemento;
+function aplicarElemento(nombre) {
+  estado.elemento = nombre;
+  const axial = nombre === 'axial';
+  varillaGroup.visible = axial;
+  espiraGroup.visible = !axial;
+  estado.segmentos = axial ? segmentosVarilla() : segmentosEspira();
+  document.getElementById('elemento').value = nombre;
   actualizarCampo();
   actualizarPanelVR();
+}
+
+function cambiarElemento() {
+  aplicarElemento(estado.elemento === 'axial' ? 'tangencial' : 'axial');
   mostrarToast('🔀 ' + (estado.elemento === 'axial' ? 'Varilla' : 'Espira'));
 }
 
@@ -2271,6 +2298,7 @@ function toggleSonido() {
   const btn = document.getElementById('btnSonido');
   if (!audioActivo) {
     iniciarAudio();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     audioActivo = true;
     btn.textContent = '🔊 Sonido activado';
     btn.classList.add('activo');
@@ -2280,6 +2308,7 @@ function toggleSonido() {
     audioActivo = false;
     if (audioGain) audioGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
     if (audioNoiseGain) audioNoiseGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+    setTimeout(() => { if (!audioActivo && audioCtx) audioCtx.suspend(); }, 500);
     btn.textContent = '🔇 Sonido silenciado';
     btn.classList.remove('activo');
     mostrarToast('🔇 Sonido silenciado');
@@ -2289,20 +2318,7 @@ function toggleSonido() {
 // ============================================================
 // UI ESCRITORIO
 // ============================================================
-document.getElementById('elemento').addEventListener('change', e => {
-  estado.elemento = e.target.value;
-  if (estado.elemento === 'axial') {
-    varillaGroup.visible = true;
-    espiraGroup.visible = false;
-    estado.segmentos = segmentosVarilla();
-  } else {
-    varillaGroup.visible = false;
-    espiraGroup.visible = true;
-    estado.segmentos = segmentosEspira();
-  }
-  actualizarCampo();
-  actualizarPanelVR();
-});
+document.getElementById('elemento').addEventListener('change', e => aplicarElemento(e.target.value));
 
 document.getElementById('corriente').addEventListener('input', e => {
   estado.I = parseFloat(e.target.value);
@@ -2373,7 +2389,7 @@ function agregarFila(elemento, I, s_mm, B) {
 
 document.getElementById('btnGuardar').addEventListener('click', () => {
   const B = actualizarLectura();
-  agregarFila(estado.elemento, estado.I, estado.s_mm, B);
+  agregarFila(estado.elemento, estado.I, sActual_mm(), B);
   mostrarToast('✅ Medición guardada');
 });
 
@@ -2415,8 +2431,8 @@ function generarGrafica(dataPoints, xLabel, titulo, color) {
   ctx.fillRect(0, 0, 600, 400);
   if (dataPoints.length < 2) return null;
 
-  const maxX = Math.max(...dataPoints.map(d => d.x));
-  const maxY = Math.max(...dataPoints.map(d => d.y));
+  const maxX = Math.max(...dataPoints.map(d => d.x)) || 1;
+  const maxY = Math.max(...dataPoints.map(d => d.y)) || 1;
   const minY = 0;
   const ox = 80, oy = 340, w = 460, h = 270;
 
@@ -2487,126 +2503,175 @@ function generarGrafica(dataPoints, xLabel, titulo, color) {
   return canvas.toDataURL('image/png');
 }
 
+function moda(arr) {
+  const cuenta = new Map();
+  let mejor = arr[0], n = 0;
+  for (const v of arr) {
+    const k = (cuenta.get(v) || 0) + 1;
+    cuenta.set(v, k);
+    if (k > n) { n = k; mejor = v; }
+  }
+  return mejor;
+}
+
+// Valor analítico (mT) que corresponde a la geometría simulada
+function BteoricoMT(elemento, I, s_mm) {
+  const s = s_mm / 1000;
+  if (s <= 0) return 0;
+  if (elemento === 'axial') {
+    const h = VARILLA_LARGO_CM / 200; // semilongitud en m
+    return (MU0 * I / (4 * Math.PI * s)) * (2 * h / Math.sqrt(h * h + s * s)) * 1000;
+  }
+  const R = ESPIRA_RADIO_CM / 100;
+  return (MU0 * I * R * R / (2 * Math.pow(R * R + s * s, 1.5))) * 1000;
+}
+
+// Pendiente n del ajuste log-log  y ∝ x^n  (null si no hay datos suficientes)
+function ajustePotencia(pts) {
+  const v = pts.filter(p => p.x > 0 && p.y > 0);
+  if (v.length < 3 || new Set(v.map(p => p.x)).size < 3) return null;
+  const lx = v.map(p => Math.log(p.x)), ly = v.map(p => Math.log(p.y));
+  const n = v.length;
+  const mx = lx.reduce((a, b) => a + b) / n, my = ly.reduce((a, b) => a + b) / n;
+  let num = 0, den = 0;
+  for (let i = 0; i < n; i++) { num += (lx[i] - mx) * (ly[i] - my); den += (lx[i] - mx) ** 2; }
+  return den > 0 ? num / den : null;
+}
+
+function dataURLtoUint8(dataURL) {
+  const binary = atob(dataURL.split(',')[1]);
+  const arr = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
+  return arr;
+}
+
 document.getElementById('btnReporte').addEventListener('click', async () => {
-  if (datosCapturados.length === 0) {
-    mostrarToast('⚠️ No hay datos capturados');
-    return;
-  }
+  if (datosCapturados.length === 0) { mostrarToast('⚠️ No hay datos capturados'); return; }
+  if (!window.docx) { mostrarToast('⚠️ No se cargó la librería docx (revisa tu conexión)'); return; }
+
+  const elem = estado.elemento;
+  const datosElem = datosCapturados.filter(d => d.elemento === elem);
+  if (datosElem.length === 0) { mostrarToast('⚠️ No hay datos del elemento actual'); return; }
+
   mostrarToast('📄 Generando reporte...');
+  try {
+    const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+            HeadingLevel, AlignmentType, WidthType, ImageRun } = window.docx;
 
-  const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-          HeadingLevel, AlignmentType, WidthType, ImageRun } = window.docx;
+    const fecha = new Date().toLocaleString('es-CO');
+    const esVarilla = elem === 'axial';
+    const elemNombre = esVarilla
+      ? `Varilla recta finita de ${VARILLA_LARGO_CM} cm (sonda perpendicular)`
+      : `Espira circular de radio ${ESPIRA_RADIO_CM} cm (sonda en el eje)`;
 
-  const fecha = new Date().toLocaleString('es-CO');
+    // s fija e I fija = los valores más repetidos (robusto frente a barridos)
+    const sFijo = moda(datosElem.map(d => Math.round(d.s_mm)));
+    const IFijo = moda(datosElem.map(d => d.I.toFixed(1)));
+    const datosBvsI = datosElem.filter(d => Math.round(d.s_mm) === sFijo).map(d => ({ x: d.I, y: d.B }));
+    const datosBvsS = datosElem.filter(d => d.I.toFixed(1) === IFijo).map(d => ({ x: d.s_mm, y: d.B }));
 
-  const datosElem = datosCapturados.filter(d => d.elemento === estado.elemento);
-  if (datosElem.length === 0) {
-    mostrarToast('⚠️ No hay datos del elemento actual');
-    return;
-  }
+    const imgBvsI = datosBvsI.length > 2 ? generarGrafica(datosBvsI, 'I (A)', `B vs I  (s = ${sFijo} mm)`, '#2563eb') : null;
+    const imgBvsS = datosBvsS.length > 2 ? generarGrafica(datosBvsS, 's (mm)', `B vs s  (I = ${IFijo} A)`, '#9333ea') : null;
 
-  const elemNombre = estado.elemento === 'axial'
-    ? 'Varilla rectilínea perpendicular (axial)'
-    : 'Espira circular (tangencial)';
+    // Comparación con la fórmula analítica
+    const filasDatos = datosElem.map((d, i) => {
+      const t = BteoricoMT(d.elemento, d.I, d.s_mm);
+      const err = t > 0 ? Math.abs(d.B - t) / t * 100 : null;
+      return { i: i + 1, d, t, err };
+    });
+    const errores = filasDatos.filter(f => f.err !== null).map(f => f.err);
+    const errMedio = errores.length ? errores.reduce((a, b) => a + b) / errores.length : null;
 
-  const sFijo = datosElem[0].s_mm;
-  const datosBvsI = datosElem.filter(d => d.s_mm === sFijo).map(d => ({ x: d.I, y: d.B }));
-  const IFijo = datosElem[0].I;
-  const datosBvsS = datosElem.filter(d => d.I === IFijo).map(d => ({ x: d.s_mm, y: d.B }));
-
-  let imgBvsI = null, imgBvsS = null;
-  if (datosBvsI.length > 2) imgBvsI = generarGrafica(datosBvsI, 'I (A)', 'B vs I  (s fijo)', '#2563eb');
-  if (datosBvsS.length > 2) imgBvsS = generarGrafica(datosBvsS, 's (mm)', 'B vs s  (I fijo)', '#9333ea');
-
-  function dataURLtoUint8(dataURL) {
-    const base64 = dataURL.split(',')[1];
-    const binary = atob(base64);
-    const arr = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
-    return arr;
-  }
-
-  const filas = [
-    new TableRow({
-      children: ['#', 'Elemento', 'I (A)', 's (mm)', 'B (mT)'].map(t =>
-        new TableCell({
+    const cab = ['#', 'I (A)', 's (mm)', 'B sim. (mT)', 'B teór. (mT)', 'Error (%)'];
+    const filas = [
+      new TableRow({
+        children: cab.map(t => new TableCell({
           children: [new Paragraph({ children: [new TextRun({ text: t, bold: true, color: 'FFFFFF' })] })],
           shading: { fill: '2563EB' }
-        })
-      )
-    }),
-    ...datosCapturados.map((d, i) => new TableRow({
-      children: [
-        (i+1).toString(),
-        d.elemento === 'axial' ? 'Varilla' : 'Espira',
-        d.I.toFixed(1),
-        d.s_mm.toFixed(0),
-        d.B.toFixed(4)
-      ].map(t => new TableCell({ children: [new Paragraph(t)] }))
-    }))
-  ];
-
-  const children = [
-    new Paragraph({
-      children: [new TextRun({ text: 'REPORTE DE LABORATORIO', bold: true, size: 36, color: '2563EB' })],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 200 }
-    }),
-    new Paragraph({
-      children: [new TextRun({ text: 'Ley de Biot-Savart — Campo magnético generado por corriente eléctrica', italics: true, size: 22 })],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 400 }
-    }),
-    new Paragraph({ children: [new TextRun({ text: `Fecha: ${fecha}` })] }),
-    new Paragraph({ children: [new TextRun({ text: `Elemento estudiado: ${elemNombre}` })], spacing: { after: 300 } }),
-    new Paragraph({ text: '1. Marco teórico', heading: HeadingLevel.HEADING_1, spacing: { before: 200, after: 150 } }),
-    new Paragraph('La ley de Biot-Savart describe el campo magnético producido por una corriente eléctrica estacionaria:'),
-    new Paragraph({ children: [new TextRun({ text: 'dB = (μ₀ I / 4π) · (dl × r̂) / r²', italics: true })], alignment: AlignmentType.CENTER, spacing: { before: 150, after: 150 } }),
-    new Paragraph('Para una varilla rectilínea larga, el campo a distancia r perpendicular vale B = μ₀ I / (2π r). Para una espira circular de radio R en su eje, B = μ₀ I R² / [2(R² + x²)^(3/2)].'),
-    new Paragraph({ text: '2. Datos experimentales', heading: HeadingLevel.HEADING_1, spacing: { before: 300, after: 150 } }),
-    new Table({ rows: filas, width: { size: 100, type: WidthType.PERCENTAGE } })
-  ];
-
-  if (imgBvsI) {
-    children.push(
-      new Paragraph({ text: '3. Gráfica B vs I', heading: HeadingLevel.HEADING_1, spacing: { before: 300, after: 150 } }),
-      new Paragraph({
-        children: [new ImageRun({ data: dataURLtoUint8(imgBvsI), transformation: { width: 500, height: 330 } })],
-        alignment: AlignmentType.CENTER
+        }))
       }),
-      new Paragraph({ children: [new TextRun({ text: 'A distancia constante, B crece linealmente con I.', italics: true, size: 20 })], spacing: { before: 100, after: 200 } })
-    );
-  }
+      ...filasDatos.map(f => new TableRow({
+        children: [
+          String(f.i), f.d.I.toFixed(1), f.d.s_mm.toFixed(0), f.d.B.toFixed(4),
+          f.t.toFixed(4), f.err === null ? '—' : f.err.toFixed(2)
+        ].map(t => new TableCell({ children: [new Paragraph(t)] }))
+      }))
+    ];
 
-  if (imgBvsS) {
-    children.push(
-      new Paragraph({ text: '4. Gráfica B vs s', heading: HeadingLevel.HEADING_1, spacing: { before: 300, after: 150 } }),
+    // Conclusiones calculadas a partir de los datos
+    const nI = ajustePotencia(datosBvsI);
+    const nS = ajustePotencia(datosBvsS);
+    const interpS = esVarilla
+      ? 'Para una varilla finita el exponente está entre −1 (varilla muy larga, s ≪ L) y −2 (s ≫ L), por lo que B no decae exactamente como 1/r.'
+      : 'Para la espira sobre su eje el exponente es cercano a 0 cuando s ≪ R y tiende a −3 cuando s ≫ R.';
+    const conclusiones = [
+      nI !== null
+        ? `Con s fija (${sFijo} mm), el ajuste log-log da B ∝ I^${nI.toFixed(3)}. Un exponente cercano a 1 confirma la proporcionalidad lineal entre B e I.`
+        : 'No hay datos suficientes para verificar B vs I (se requieren al menos 3 valores distintos de I > 0 con s fija).',
+      nS !== null
+        ? `Con I fija (${IFijo} A), el ajuste log-log da B ∝ s^${nS.toFixed(3)}. ${interpS}`
+        : 'No hay datos suficientes para verificar B vs s (se requieren al menos 3 distancias distintas con I fija).',
+      errMedio !== null
+        ? `El error relativo medio entre la integración numérica (100 segmentos) y la fórmula analítica es ${errMedio.toFixed(3)} %.`
+        : 'No fue posible calcular el error respecto a la fórmula analítica.'
+    ];
+
+    const h1 = (t) => new Paragraph({ text: t, heading: HeadingLevel.HEADING_1, spacing: { before: 300, after: 150 } });
+    const nota = (t) => new Paragraph({ children: [new TextRun({ text: t, italics: true, size: 20 })], spacing: { before: 100, after: 200 } });
+    const imagen = (img) => new Paragraph({
+      children: [new ImageRun({ data: dataURLtoUint8(img), transformation: { width: 500, height: 330 } })],
+      alignment: AlignmentType.CENTER
+    });
+
+    const children = [
       new Paragraph({
-        children: [new ImageRun({ data: dataURLtoUint8(imgBvsS), transformation: { width: 500, height: 330 } })],
-        alignment: AlignmentType.CENTER
+        children: [new TextRun({ text: 'REPORTE DE LABORATORIO VIRTUAL', bold: true, size: 36, color: '2563EB' })],
+        alignment: AlignmentType.CENTER, spacing: { after: 200 }
       }),
-      new Paragraph({ children: [new TextRun({ text: 'La magnitud de B decae con la distancia: 1/r para varilla, 1/r³ para espira lejos de su centro.', italics: true, size: 20 })], spacing: { before: 100, after: 200 } })
+      new Paragraph({
+        children: [new TextRun({ text: 'Ley de Biot-Savart — Campo magnético generado por corriente eléctrica', italics: true, size: 22 })],
+        alignment: AlignmentType.CENTER, spacing: { after: 400 }
+      }),
+      new Paragraph({ children: [new TextRun({ text: `Fecha: ${fecha}` })] }),
+      new Paragraph({ children: [new TextRun({ text: `Elemento estudiado: ${elemNombre}` })], spacing: { after: 300 } }),
+
+      h1('1. Marco teórico'),
+      new Paragraph('La ley de Biot-Savart describe el campo magnético producido por una corriente estacionaria:'),
+      new Paragraph({ children: [new TextRun({ text: 'dB = (μ₀ I / 4π) · (dl × r̂) / r²', italics: true })], alignment: AlignmentType.CENTER, spacing: { before: 150, after: 150 } }),
+      new Paragraph(esVarilla
+        ? `Para una varilla recta finita de longitud 2h = ${VARILLA_LARGO_CM} cm y un punto en su plano medio a distancia s: B = (μ₀ I / 4π s) · 2h / √(h² + s²). Cuando h ≫ s se reduce al caso de varilla infinita, B = μ₀ I / (2π s). Una varilla aislada no cumple la conservación de la corriente (∇·J = 0), por lo que es una idealización didáctica.`
+        : `Para una espira circular de radio R = ${ESPIRA_RADIO_CM} cm, sobre su eje y a distancia s de su centro: B = μ₀ I R² / [2 (R² + s²)^(3/2)].`),
+      new Paragraph('El simulador calcula B sumando numéricamente la contribución de 100 segmentos del conductor. Los datos de este reporte provienen de esa simulación, no de mediciones físicas.'),
+
+      h1('2. Datos de la simulación (solo el elemento actual)'),
+      new Table({ rows: filas, width: { size: 100, type: WidthType.PERCENTAGE } })
+    ];
+
+    if (imgBvsI) children.push(h1('3. Gráfica B vs I'), imagen(imgBvsI), nota(`Puntos con s ≈ ${sFijo} mm.`));
+    if (imgBvsS) children.push(h1('4. Gráfica B vs s'), imagen(imgBvsS), nota(`Puntos con I = ${IFijo} A.`));
+
+    children.push(
+      h1('5. Análisis y conclusiones'),
+      ...conclusiones.map(t => new Paragraph('• ' + t)),
+      new Paragraph({ children: [new TextRun({ text: 'Fuentes de discrepancia: discretización del conductor en 100 segmentos y, si el teslámetro se movió a mano en VR, desalineación respecto al eje de medición.', italics: true, size: 20 })], spacing: { before: 150 } })
     );
+
+    const doc = new Document({ sections: [{ properties: {}, children }] });
+    const blob = await Packer.toBlob(doc);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Reporte_LeyBiotSavart_${Date.now()}.docx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+    mostrarToast('✅ Reporte descargado en Descargas');
+  } catch (err) {
+    console.error(err);
+    mostrarToast('⚠️ Error al generar el reporte');
   }
-
-  children.push(
-    new Paragraph({ text: '5. Análisis y conclusiones', heading: HeadingLevel.HEADING_1, spacing: { before: 300, after: 150 } }),
-    new Paragraph('• Se corroboró experimentalmente que una corriente eléctrica genera un campo magnético medible.'),
-    new Paragraph('• El campo B es proporcional a la corriente I aplicada.'),
-    new Paragraph('• El campo decae con la distancia: 1/r para varilla, 1/r³ para espira.'),
-    new Paragraph({ children: [new TextRun({ text: 'Fuentes de error: precisión del teslámetro, alineación de la sonda, campos ambientales.', italics: true, size: 20 })], spacing: { before: 150 } })
-  );
-
-  const doc = new Document({ sections: [{ properties: {}, children }] });
-  const blob = await Packer.toBlob(doc);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `Reporte_LeyBiotSavart_${Date.now()}.docx`;
-  a.click();
-  URL.revokeObjectURL(url);
-
-  mostrarToast('✅ Reporte descargado en Descargas');
 });
 
 // ============================================================
@@ -2617,6 +2682,8 @@ function animate() {
   const dt = Math.min((now - lastTime) / 1000, 0.1);
   lastTime = now;
   timeAcc += dt;
+
+  if (campoSucio) { campoSucio = false; reconstruirCampo(); }
 
   animarOrbitas(dt);
   procesarControlesXR();
