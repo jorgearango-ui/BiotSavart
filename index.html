@@ -120,7 +120,6 @@
     <option value="tangencial">Espira circular (sonda en el eje)</option>
   </select>
 
-  <!-- CONTROLES DE GEOMETRÍA -->
   <div id="controlVarilla">
     <label>Longitud varilla <span class="valor" id="valLargo">12.0 cm</span></label>
     <input type="range" id="largoVarilla" min="2" max="30" value="12" step="1">
@@ -224,7 +223,7 @@ const CM = 0.01;
 const CARRIL_LARGO_CM = 30;
 const ALTURA_EJE_CM = 6;
 
-// AHORA SON VARIABLES PARA PODER MODIFICARSE EN TIEMPO REAL
+// VARIABLES DINÁMICAS
 let VARILLA_LARGO_CM = 12;
 let ESPIRA_RADIO_CM = 2.5;
 
@@ -519,7 +518,6 @@ scene.add(teslametroGroup);
 // ============================================================
 const varillaGroup = new THREE.Group();
 
-// Se crea con longitud 1 y se escala según la variable
 const varilla = new THREE.Mesh(
   new THREE.CylinderGeometry(VARILLA_RADIO_CM/100 * ESCALA_MUNDO, VARILLA_RADIO_CM/100 * ESCALA_MUNDO, 1, 16),
   new THREE.MeshStandardMaterial({
@@ -543,16 +541,11 @@ haloVarilla.rotation.x = Math.PI / 2;
 haloVarilla.position.copy(posMundo(0, ALTURA_EJE_CM/100, 0));
 varillaGroup.add(haloVarilla);
 
-// Función para actualizar la escala del modelo de la varilla
 function escalarModeloVarilla() {
-  // Como la geometría base mide 1 metro, la escala directa es la longitud en metros
   varilla.scale.z = VARILLA_LARGO_CM / 100 * ESCALA_MUNDO;
   haloVarilla.scale.z = VARILLA_LARGO_CM / 100 * ESCALA_MUNDO;
 }
 
-// Soportes de la varilla (se dejan estáticos al centro de la mesa, aunque la varilla se estire)
-// En una simulación real, los soportes se ajustarían a los extremos. 
-// Aquí se crean dos postes fijos para evitar recálculos visuales complejos.
 for (const z of [-VARILLA_LARGO_CM/2/100 - 0.005, VARILLA_LARGO_CM/2/100 + 0.005]) {
   const soporte = new THREE.Mesh(
     new THREE.BoxGeometry(0.012 * ESCALA_MUNDO, 0.012 * ESCALA_MUNDO, 0.01 * ESCALA_MUNDO),
@@ -576,7 +569,6 @@ scene.add(varillaGroup);
 // ============================================================
 const espiraGroup = new THREE.Group();
 
-// Se crea con radio 1 y se escala según la variable
 const espira = new THREE.Mesh(
   new THREE.TorusGeometry(1, 0.0025 * ESCALA_MUNDO, 16, 64),
   new THREE.MeshStandardMaterial({
@@ -766,7 +758,6 @@ let zonaElemento = null;
 let zonaLargoAnterior = null;
 
 function crearZonaInfluencia() {
-  // La zona solo depende del elemento y del tamaño de la varilla
   if (zonaElemento === estado.elemento && zonaGroup.children.length && zonaLargoAnterior === VARILLA_LARGO_CM) return;
   zonaElemento = estado.elemento;
   zonaLargoAnterior = VARILLA_LARGO_CM;
@@ -1156,7 +1147,7 @@ function crearLineas() {
 
   const semillas = [];
   if (estado.elemento === 'axial') {
-    const N = 6; // Reducido para rendimiento
+    const N = 6;
     const N_LINEAS_Z = 5;
     const Z_MIN = -VARILLA_LARGO_CM / 2 + 1;
     const Z_MAX = VARILLA_LARGO_CM / 2 - 1;
@@ -1230,7 +1221,7 @@ function regenerarParticulas() {
   });
   if (lineas.length === 0) return;
 
-  const NPORLINEA = 2; // Reducido para rendimiento
+  const NPORLINEA = 2;
   const total = lineas.length * NPORLINEA;
 
   const posiciones = new Float32Array(total * 3);
@@ -1992,9 +1983,10 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
   grupo.userData.perilla = perilla;
   grupo.userData.relleno = relleno;
   grupo.userData.valorPlano = valorPlano;
+  grupo.userData.etiqueta = etiquetaPlano;
   grupo.userData.unidad = unidad || '';
 
-  function actualizarVisual() {
+  grupo.userData.actualizarVisual = function() {
     const t = (grupo.userData.valor - min) / (max - min);
     perilla.position.x = -w / 2 + t * w;
     perilla.position.z = 0.001;
@@ -2004,17 +1996,20 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
 
     const txtValor = grupo.userData.valor.toFixed(step < 1 ? 1 : 0) + ' ' + grupo.userData.unidad;
     redibujarTextoVR(valorPlano, txtValor, '#4da3ff', 90);
-  }
-  grupo.userData.actualizarVisual = actualizarVisual;
-  actualizarVisual();
+  };
+  grupo.userData.actualizarVisual();
 
   panelVRGroup.add(grupo);
   return grupo;
 }
 
+// ============================================================
+// DISTRIBUCIÓN DEL TABLERO
+// ============================================================
 crearTextoVR('⚡ LEY DE BIOT-SAVART', 0, PANEL_ALTO / 2 - 0.11, 0.7, '#22d3ee', 120);
 
-const sliderI_VR = crearSliderVR(-0.30, 0.50, 1.7, estado.I, 0, 100, 0.5, 0x4da3ff, (v) => {
+// Sliders
+const sliderI_VR = crearSliderVR(-0.30, 0.55, 1.7, estado.I, 0, 100, 0.5, 0x4da3ff, (v) => {
   estado.I = v;
   document.getElementById('corriente').value = v;
   document.getElementById('valI').textContent = v.toFixed(1) + ' A';
@@ -2023,7 +2018,7 @@ const sliderI_VR = crearSliderVR(-0.30, 0.50, 1.7, estado.I, 0, 100, 0.5, 0x4da3
   actualizarAudio();
 }, 'Corriente eléctrica  I', 'A');
 
-const sliderS_VR = crearSliderVR(-0.30, 0.14, 1.7, estado.s_mm, 5, 300, 1, 0x10b981, (v) => {
+const sliderS_VR = crearSliderVR(-0.30, 0.22, 1.7, estado.s_mm, 5, 300, 1, 0x10b981, (v) => {
   estado.s_mm = v;
   document.getElementById('posicion').value = v;
   document.getElementById('valS').textContent = v.toFixed(0) + ' mm';
@@ -2032,7 +2027,36 @@ const sliderS_VR = crearSliderVR(-0.30, 0.14, 1.7, estado.s_mm, 5, 300, 1, 0x10b
   actualizarLectura();
 }, 'Posición de la sonda  s', 'mm');
 
-const sliderAmp_VR = crearSliderVR(-0.30, -0.22, 1.7, estado.amplificacion, 1, 500, 1, 0xf59e0b, (v) => {
+// NUEVO SLIDER: Geometría dinámica
+const sliderGeom_VR = crearSliderVR(-0.30, -0.11, 1.7, VARILLA_LARGO_CM, 2, 30, 1, 0x9333ea, (v) => {
+  if (estado.elemento === 'axial') {
+    VARILLA_LARGO_CM = v;
+    document.getElementById('largoVarilla').value = v;
+    document.getElementById('valLargo').textContent = v.toFixed(1) + ' cm';
+    escalarModeloVarilla();
+    estado.segmentos = segmentosVarilla();
+  } else {
+    ESPIRA_RADIO_CM = v;
+    document.getElementById('radioEspira').value = v;
+    document.getElementById('valRadio').textContent = v.toFixed(1) + ' cm';
+    escalarModeloEspira();
+    estado.segmentos = segmentosEspira();
+  }
+  actualizarCampo();
+}, 'Largo varilla', 'cm');
+
+function actualizarSliderGeomVR() {
+  const esVarilla = estado.elemento === 'axial';
+  sliderGeom_VR.userData.etiqueta.textContent = esVarilla ? 'Largo varilla' : 'Radio espira';
+  sliderGeom_VR.userData.valorPlano.textContent = esVarilla ? VARILLA_LARGO_CM.toFixed(1) + ' cm' : ESPIRA_RADIO_CM.toFixed(1) + ' cm';
+  sliderGeom_VR.userData.min = esVarilla ? 2 : 1;
+  sliderGeom_VR.userData.max = esVarilla ? 30 : 10;
+  sliderGeom_VR.userData.step = esVarilla ? 1 : 0.5;
+  sliderGeom_VR.userData.valor = esVarilla ? VARILLA_LARGO_CM : ESPIRA_RADIO_CM;
+  sliderGeom_VR.userData.actualizarVisual();
+}
+
+const sliderAmp_VR = crearSliderVR(-0.30, -0.44, 1.7, estado.amplificacion, 1, 500, 1, 0xf59e0b, (v) => {
   estado.amplificacion = v;
   document.getElementById('amplificacion').value = v;
   document.getElementById('valAmp').textContent = v;
@@ -2041,15 +2065,18 @@ const sliderAmp_VR = crearSliderVR(-0.30, -0.22, 1.7, estado.amplificacion, 1, 5
   regenerarParticulas();
 }, 'Amplificación visual', '×');
 
-const btnElementoVR = crearBotonVR('⟷ VARILLA / ESPIRA', -0.70, -0.42, 1.20, 0.10, 0x2563eb, () => {
+// BOTONES
+const btnElementoVR = crearBotonVR('⟷ VARILLA / ESPIRA', -0.70, -0.58, 1.20, 0.10, 0x2563eb, () => {
   cambiarElemento();
+  actualizarSliderGeomVR();
 }, 120);
 
-const btnSonidoVR = crearBotonVR('🔊 SONIDO', 0.85, -0.42, 0.75, 0.10, 0xf59e0b, () => {
+const btnSonidoVR = crearBotonVR('🔊 SONIDO', 0.85, -0.58, 0.75, 0.10, 0xf59e0b, () => {
   toggleSonido();
   redibujarBotonVR(btnSonidoVR, audioActivo ? '🔊 ACTIVO' : '🔇 SILENCIO', audioActivo ? 0x059669 : 0xf59e0b);
 }, 120);
 
+// TOGGLES
 function crearToggleVR(texto, x, y, activo, onClick) {
   const btn = crearBotonVR(texto, x, y, 0.50, 0.09, activo ? 0x0891b2 : 0x334155, () => {
     const nuevo = !btn.userData.activo;
@@ -2067,35 +2094,36 @@ function actualizarToggleVisual(btn, texto, activo) {
   redibujarBotonVR(btn, texto + (activo ? ' ✓' : ' ✗'), btn.userData.colorBase);
 }
 
-crearToggleVR('Zona',       -1.10, -0.58, estado.mostrarZona,       (v) => { estado.mostrarZona = v; zonaGroup.visible = v; document.getElementById('chkZona').checked = v; });
-crearToggleVR('Órbitas',    -0.55, -0.58, estado.mostrarVectores,   (v) => { estado.mostrarVectores = v; vectoresGroup.visible = v; document.getElementById('chkVectores').checked = v; if (v) crearOrbitas(); });
-crearToggleVR('Líneas',      0.00, -0.58, estado.mostrarLineas,     (v) => { estado.mostrarLineas = v; lineasGroup.visible = v; document.getElementById('chkLineas').checked = v; if (v) { crearLineas(); regenerarParticulas(); } });
-crearToggleVR('Partículas',  0.55, -0.58, estado.mostrarParticulas, (v) => { estado.mostrarParticulas = v; particulasGroup.visible = v; document.getElementById('chkParticulas').checked = v; if (v) regenerarParticulas(); });
-crearToggleVR('Límite',      1.10, -0.58, estado.mostrarLimite,     (v) => { estado.mostrarLimite = v; limiteGroup.visible = v; document.getElementById('chkLimite').checked = v; crearAnilloLimite(); });
+crearToggleVR('Zona',       -1.10, -0.70, estado.mostrarZona,       (v) => { estado.mostrarZona = v; zonaGroup.visible = v; document.getElementById('chkZona').checked = v; });
+crearToggleVR('Órbitas',    -0.55, -0.70, estado.mostrarVectores,   (v) => { estado.mostrarVectores = v; vectoresGroup.visible = v; document.getElementById('chkVectores').checked = v; if (v) crearOrbitas(); });
+crearToggleVR('Líneas',      0.00, -0.70, estado.mostrarLineas,     (v) => { estado.mostrarLineas = v; lineasGroup.visible = v; document.getElementById('chkLineas').checked = v; if (v) { crearLineas(); regenerarParticulas(); } });
+crearToggleVR('Partículas',  0.55, -0.70, estado.mostrarParticulas, (v) => { estado.mostrarParticulas = v; particulasGroup.visible = v; document.getElementById('chkParticulas').checked = v; if (v) regenerarParticulas(); });
+crearToggleVR('Límite',      1.10, -0.70, estado.mostrarLimite,     (v) => { estado.mostrarLimite = v; limiteGroup.visible = v; document.getElementById('chkLimite').checked = v; crearAnilloLimite(); });
 
-crearBotonVR('📌 GUARDAR', -1.00, -0.76, 0.50, 0.09, 0x059669, () => {
+// ACCIONES
+crearBotonVR('📌 GUARDAR', -1.00, -0.84, 0.50, 0.09, 0x059669, () => {
   const B = actualizarLectura();
   agregarFila(estado.elemento, estado.I, sActual_mm(), B);
   mostrarToast('✅ Guardado');
 }, 100);
 
-crearBotonVR('B vs I', -0.45, -0.76, 0.40, 0.09, 0x2563eb, () => {
+crearBotonVR('B vs I', -0.45, -0.84, 0.40, 0.09, 0x2563eb, () => {
   document.getElementById('btnBarridoI').click();
 }, 100);
 
-crearBotonVR('B vs s', 0.00, -0.76, 0.40, 0.09, 0x2563eb, () => {
+crearBotonVR('B vs s', 0.00, -0.84, 0.40, 0.09, 0x2563eb, () => {
   document.getElementById('btnBarridoS').click();
 }, 100);
 
-crearBotonVR('📄 REPORTE', 0.72, -0.76, 0.70, 0.09, 0x9333ea, () => {
+crearBotonVR('📄 REPORTE', 0.72, -0.84, 0.70, 0.09, 0x9333ea, () => {
   document.getElementById('btnReporte').click();
 }, 100);
 
-crearBotonVR('🗑️ LIMPIAR', -0.60, -0.90, 0.50, 0.085, 0xdc2626, () => {
+crearBotonVR('🗑️ LIMPIAR', -0.60, -0.96, 0.50, 0.085, 0xdc2626, () => {
   document.getElementById('btnLimpiar').click();
 }, 100);
 
-crearBotonVR('🔄 RESET', 0.10, -0.90, 0.50, 0.085, 0x0891b2, () => {
+crearBotonVR('🔄 RESET', 0.10, -0.96, 0.50, 0.085, 0x0891b2, () => {
   document.getElementById('corriente').value = 15;
   document.getElementById('corriente').dispatchEvent(new Event('input'));
   document.getElementById('posicion').value = 100;
@@ -2108,7 +2136,7 @@ crearBotonVR('🔄 RESET', 0.10, -0.90, 0.50, 0.085, 0x0891b2, () => {
   mostrarToast('🔄 Reset');
 }, 100);
 
-const displayLecturaVR = crearTextoVR('B = 0.0000 mT   [VARILLA]', 0, -1.04, 0.6, '#4da3ff', 100);
+const displayLecturaVR = crearTextoVR('B = 0.0000 mT   [VARILLA]', 0, -1.08, 0.6, '#4da3ff', 100);
 
 function actualizarPanelVR() {
   const nuevoTexto = estado.elemento === 'axial' ? '⟷ VARILLA ⟶ ESPIRA' : '⟷ ESPIRA ⟶ VARILLA';
@@ -2246,6 +2274,7 @@ renderer.xr.addEventListener('sessionstart', () => {
   document.getElementById('aviso').style.display = 'none';
   panelVRGroup.visible = true;
   actualizarPanelVR();
+  actualizarSliderGeomVR();
 });
 
 renderer.xr.addEventListener('sessionend', () => {
@@ -2335,7 +2364,6 @@ function aplicarElemento(nombre) {
   espiraGroup.visible = !axial;
   estado.segmentos = axial ? segmentosVarilla() : segmentosEspira();
   
-  // Mostrar/Ocultar sliders de geometría
   document.getElementById('controlVarilla').style.display = axial ? 'block' : 'none';
   document.getElementById('controlEspira').style.display = axial ? 'none' : 'block';
 
@@ -2346,6 +2374,7 @@ function aplicarElemento(nombre) {
 
 function cambiarElemento() {
   aplicarElemento(estado.elemento === 'axial' ? 'tangencial' : 'axial');
+  actualizarSliderGeomVR();
   mostrarToast('🔀 ' + (estado.elemento === 'axial' ? 'Varilla' : 'Espira'));
 }
 
@@ -2405,12 +2434,19 @@ document.getElementById('posicion').addEventListener('input', e => {
   sliderS_VR.userData.actualizarVisual();
 });
 
-// LISTENERS DE GEOMETRÍA
+// LISTENERS DE GEOMETRÍA (Sincronizados con VR)
 document.getElementById('largoVarilla').addEventListener('input', e => {
   VARILLA_LARGO_CM = parseFloat(e.target.value);
   document.getElementById('valLargo').textContent = VARILLA_LARGO_CM.toFixed(1) + ' cm';
   escalarModeloVarilla();
   estado.segmentos = segmentosVarilla();
+  
+  // Sincronizar con VR
+  if (estado.elemento === 'axial') {
+    sliderGeom_VR.userData.valor = VARILLA_LARGO_CM;
+    sliderGeom_VR.userData.actualizarVisual();
+  }
+  
   actualizarCampo();
 });
 
@@ -2419,6 +2455,13 @@ document.getElementById('radioEspira').addEventListener('input', e => {
   document.getElementById('valRadio').textContent = ESPIRA_RADIO_CM.toFixed(1) + ' cm';
   escalarModeloEspira();
   estado.segmentos = segmentosEspira();
+  
+  // Sincronizar con VR
+  if (estado.elemento === 'tangencial') {
+    sliderGeom_VR.userData.valor = ESPIRA_RADIO_CM;
+    sliderGeom_VR.userData.actualizarVisual();
+  }
+  
   actualizarCampo();
 });
 
@@ -2787,6 +2830,7 @@ escalarModeloVarilla();
 escalarModeloEspira();
 actualizarPosicionSonda();
 actualizarCampo();
+actualizarSliderGeomVR();
 actualizarPanelVR();
 </script>
 </body>
