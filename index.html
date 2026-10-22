@@ -112,7 +112,7 @@
   <h2>⚡ LEY DE BIOT-SAVART</h2>
   <div class="sub">Simulador 3D · Reporte</div>
 
-  <div class="seccion-titulo">Elemento y alimentación</div>
+  <div class="seccion-titulo">Elemento y geometría</div>
 
   <label>Elemento en el origen</label>
   <select id="elemento">
@@ -120,6 +120,17 @@
     <option value="tangencial">Espira circular (sonda en el eje)</option>
   </select>
 
+  <!-- CONTROLES DE GEOMETRÍA -->
+  <div id="controlVarilla">
+    <label>Longitud varilla <span class="valor" id="valLargo">12.0 cm</span></label>
+    <input type="range" id="largoVarilla" min="2" max="30" value="12" step="1">
+  </div>
+  <div id="controlEspira" style="display:none;">
+    <label>Radio espira <span class="valor" id="valRadio">2.5 cm</span></label>
+    <input type="range" id="radioEspira" min="1" max="10" value="2.5" step="0.5">
+  </div>
+
+  <div class="seccion-titulo">Alimentación</div>
   <label>Corriente I <span class="valor" id="valI">15.0 A</span></label>
   <input type="range" id="corriente" min="0" max="100" value="15" step="0.5">
 
@@ -134,7 +145,7 @@
   <div class="leyenda">
     <span><i style="background:#10b981"></i>0–50 mm zona cercana</span>
     <span><i style="background:#f59e0b"></i>50–150 mm intermedia</span>
-    <span><i style="background:#ef4444"></i>&gt;150 mm lejana (B muy débil)</span>
+    <span><i style="background:#ef4444"></i>&gt;150 mm lejana</span>
   </div>
 
   <div class="seccion-titulo">Visualización</div>
@@ -212,9 +223,12 @@ const CM = 0.01;
 
 const CARRIL_LARGO_CM = 30;
 const ALTURA_EJE_CM = 6;
-const VARILLA_LARGO_CM = 12;
+
+// AHORA SON VARIABLES PARA PODER MODIFICARSE EN TIEMPO REAL
+let VARILLA_LARGO_CM = 12;
+let ESPIRA_RADIO_CM = 2.5;
+
 const VARILLA_RADIO_CM = 0.3;
-const ESPIRA_RADIO_CM = 2.5;
 
 const ZONA_UTIL_MM = 50;
 const ZONA_DEBIL_MM = 150;
@@ -505,8 +519,9 @@ scene.add(teslametroGroup);
 // ============================================================
 const varillaGroup = new THREE.Group();
 
+// Se crea con longitud 1 y se escala según la variable
 const varilla = new THREE.Mesh(
-  new THREE.CylinderGeometry(VARILLA_RADIO_CM/100 * ESCALA_MUNDO, VARILLA_RADIO_CM/100 * ESCALA_MUNDO, VARILLA_LARGO_CM/100 * ESCALA_MUNDO, 16),
+  new THREE.CylinderGeometry(VARILLA_RADIO_CM/100 * ESCALA_MUNDO, VARILLA_RADIO_CM/100 * ESCALA_MUNDO, 1, 16),
   new THREE.MeshStandardMaterial({
     color: 0xc47a3a, metalness: 0.95, roughness: 0.15,
     emissive: 0x4a2a10, emissiveIntensity: 0.3
@@ -518,7 +533,7 @@ varilla.castShadow = true;
 varillaGroup.add(varilla);
 
 const haloVarilla = new THREE.Mesh(
-  new THREE.CylinderGeometry(0.005 * ESCALA_MUNDO, 0.005 * ESCALA_MUNDO, VARILLA_LARGO_CM/100 * ESCALA_MUNDO, 16, 1, true),
+  new THREE.CylinderGeometry(0.005 * ESCALA_MUNDO, 0.005 * ESCALA_MUNDO, 1, 16, 1, true),
   new THREE.MeshBasicMaterial({
     color: 0xff8844, transparent: true, opacity: 0.0,
     side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false
@@ -528,6 +543,16 @@ haloVarilla.rotation.x = Math.PI / 2;
 haloVarilla.position.copy(posMundo(0, ALTURA_EJE_CM/100, 0));
 varillaGroup.add(haloVarilla);
 
+// Función para actualizar la escala del modelo de la varilla
+function escalarModeloVarilla() {
+  // Como la geometría base mide 1 metro, la escala directa es la longitud en metros
+  varilla.scale.z = VARILLA_LARGO_CM / 100 * ESCALA_MUNDO;
+  haloVarilla.scale.z = VARILLA_LARGO_CM / 100 * ESCALA_MUNDO;
+}
+
+// Soportes de la varilla (se dejan estáticos al centro de la mesa, aunque la varilla se estire)
+// En una simulación real, los soportes se ajustarían a los extremos. 
+// Aquí se crean dos postes fijos para evitar recálculos visuales complejos.
 for (const z of [-VARILLA_LARGO_CM/2/100 - 0.005, VARILLA_LARGO_CM/2/100 + 0.005]) {
   const soporte = new THREE.Mesh(
     new THREE.BoxGeometry(0.012 * ESCALA_MUNDO, 0.012 * ESCALA_MUNDO, 0.01 * ESCALA_MUNDO),
@@ -551,8 +576,9 @@ scene.add(varillaGroup);
 // ============================================================
 const espiraGroup = new THREE.Group();
 
+// Se crea con radio 1 y se escala según la variable
 const espira = new THREE.Mesh(
-  new THREE.TorusGeometry(ESPIRA_RADIO_CM/100 * ESCALA_MUNDO, 0.0025 * ESCALA_MUNDO, 16, 64),
+  new THREE.TorusGeometry(1, 0.0025 * ESCALA_MUNDO, 16, 64),
   new THREE.MeshStandardMaterial({
     color: 0xc47a3a, metalness: 0.95, roughness: 0.15,
     emissive: 0x4a2a10, emissiveIntensity: 0.3
@@ -564,7 +590,7 @@ espira.castShadow = true;
 espiraGroup.add(espira);
 
 const haloEspira = new THREE.Mesh(
-  new THREE.TorusGeometry(ESPIRA_RADIO_CM/100 * ESCALA_MUNDO, 0.0045 * ESCALA_MUNDO, 16, 64),
+  new THREE.TorusGeometry(1, 0.0045 * ESCALA_MUNDO, 16, 64),
   new THREE.MeshBasicMaterial({
     color: 0xff8844, transparent: true, opacity: 0.0,
     blending: THREE.AdditiveBlending, depthWrite: false
@@ -573,6 +599,12 @@ const haloEspira = new THREE.Mesh(
 haloEspira.rotation.y = Math.PI / 2;
 haloEspira.position.copy(posMundo(0, ALTURA_EJE_CM/100, 0));
 espiraGroup.add(haloEspira);
+
+function escalarModeloEspira() {
+  const escala = ESPIRA_RADIO_CM / 100 * ESCALA_MUNDO;
+  espira.scale.set(escala, escala, escala);
+  haloEspira.scale.set(escala, escala, escala);
+}
 
 const posteEspira = new THREE.Mesh(
   new THREE.CylinderGeometry(0.0015 * ESCALA_MUNDO, 0.0015 * ESCALA_MUNDO, (ALTURA_EJE_CM/100 - ESPIRA_RADIO_CM/100 - 0.003) * ESCALA_MUNDO, 8),
@@ -605,7 +637,6 @@ posteSonda.position.y = ((ALTURA_EJE_CM/100 - 0.011)/2 + 0.011) * ESCALA_MUNDO;
 posteSonda.castShadow = true;
 sondaGroup.add(posteSonda);
 
-
 const puntaSonda = new THREE.Mesh(
   new THREE.SphereGeometry(0.0022 * ESCALA_MUNDO, 12, 12),
   new THREE.MeshStandardMaterial({
@@ -613,7 +644,7 @@ const puntaSonda = new THREE.Mesh(
     metalness: 0.5, roughness: 0.3
   })
 );
-puntaSonda.position.set(0 * ESCALA_MUNDO, ALTURA_EJE_CM/100 * ESCALA_MUNDO, 0);
+puntaSonda.position.set(0, ALTURA_EJE_CM/100 * ESCALA_MUNDO, 0);
 sondaGroup.add(puntaSonda);
 
 scene.add(sondaGroup);
@@ -653,17 +684,29 @@ function segmentosEspira() {
 function calcularB(puntoCM, segmentos, I) {
   const B = new THREE.Vector3();
   const pM = puntoCM.clone().multiplyScalar(CM);
+
+  const R_MIN_M = 0.002;
+  const R_MIN_SQ = R_MIN_M * R_MIN_M;
+
   for (let i = 0; i < segmentos.length; i++) {
     const s = segmentos[i];
     const centroM = s.centro.clone().multiplyScalar(CM);
     const R = new THREE.Vector3().subVectors(pM, centroM);
-    const r2 = R.lengthSq();
-    if (r2 < 1e-8) continue;
+    let r2 = R.lengthSq();
+    if (r2 < R_MIN_SQ) {
+      const scale = Math.sqrt(R_MIN_SQ / Math.max(r2, 1e-12));
+      R.multiplyScalar(scale);
+      r2 = R_MIN_SQ;
+    }
     const r = Math.sqrt(r2);
     const dB = new THREE.Vector3()
       .crossVectors(s.dl, R)
       .multiplyScalar((MU0 * I) / (4 * Math.PI * r * r * r));
     B.add(dB);
+  }
+
+  if (!isFinite(B.x) || !isFinite(B.y) || !isFinite(B.z)) {
+    return new THREE.Vector3(0, 0, 0);
   }
   return B;
 }
@@ -720,10 +763,14 @@ let orbitalesData = [];
 // ZONA DE INFLUENCIA
 // ============================================================
 let zonaElemento = null;
+let zonaLargoAnterior = null;
+
 function crearZonaInfluencia() {
-  // La zona solo depende del elemento, no de I: no se reconstruye si no cambió
-  if (zonaElemento === estado.elemento && zonaGroup.children.length) return;
+  // La zona solo depende del elemento y del tamaño de la varilla
+  if (zonaElemento === estado.elemento && zonaGroup.children.length && zonaLargoAnterior === VARILLA_LARGO_CM) return;
   zonaElemento = estado.elemento;
+  zonaLargoAnterior = VARILLA_LARGO_CM;
+  
   while (zonaGroup.children.length) {
     const c = zonaGroup.children[0];
     zonaGroup.remove(c);
@@ -819,14 +866,16 @@ function crearOrbitas() {
   const PARTICULAS_POR_ORBITA = 20;
 
   if (estado.elemento === 'axial') {
-    // 10 anillos de partículas orbitando alrededor de la varilla
     const N_ANILLOS_VARILLA = 10;
-    const Z_MIN = -5;
-    const Z_MAX = 5;
+    const Z_MIN = -VARILLA_LARGO_CM / 2 + 1;
+    const Z_MAX = VARILLA_LARGO_CM / 2 - 1;
     const alturasZ = [];
-    for (let k = 0; k < N_ANILLOS_VARILLA; k++) {
-      const z = Z_MIN + (k / (N_ANILLOS_VARILLA - 1)) * (Z_MAX - Z_MIN);
-      alturasZ.push(z);
+    if (Z_MIN < Z_MAX) {
+      for (let k = 0; k < N_ANILLOS_VARILLA; k++) {
+        alturasZ.push(Z_MIN + (k / (N_ANILLOS_VARILLA - 1)) * (Z_MAX - Z_MIN));
+      }
+    } else {
+      alturasZ.push(0);
     }
 
     radiosCM.forEach(radio => {
@@ -836,7 +885,8 @@ function crearOrbitas() {
       alturasZ.forEach(z => {
         const pRef = new THREE.Vector3(radio, ALTURA_EJE_CM, 0);
         const B = calcularB(pRef, estado.segmentos, estado.I);
-        const mag = B.length();
+        let mag = B.length();
+        if (!isFinite(mag) || isNaN(mag)) mag = 0;
         const velAngular = Math.min(mag * 8e5, 4.0);
 
         for (let i = 0; i < PARTICULAS_POR_ORBITA; i++) {
@@ -878,7 +928,8 @@ function crearOrbitas() {
           centroOrbitaCM.z + u.z * radio
         );
         const B = calcularB(pRef, estado.segmentos, estado.I);
-        const mag = B.length();
+        let mag = B.length();
+        if (!isFinite(mag) || isNaN(mag)) mag = 0;
         const velAngular = Math.min(mag * 8e5, 4.0);
 
         for (let i = 0; i < PARTICULAS_POR_ORBITA; i++) {
@@ -997,17 +1048,28 @@ function trazarLinea(semilla, signo) {
   let p = semilla.clone();
   const h = 0.25;
 
-  for (let i = 0; i < 400; i++) {
+  for (let i = 0; i < 150; i++) {
     const B = calcularB(p, estado.segmentos, estado.I);
-    if (B.length() < 1e-16) break;
+    const magB = B.length();
+    if (magB < 1e-16 || !isFinite(magB)) break;
+
     puntos.push(p.clone());
 
     const dir = B.clone().normalize().multiplyScalar(signo);
+    if (!isFinite(dir.x) || !isFinite(dir.y) || !isFinite(dir.z)) break;
+
     const pMid = p.clone().addScaledVector(dir, h * 0.5);
+    if (!isFinite(pMid.x) || !isFinite(pMid.y) || !isFinite(pMid.z)) break;
+
     const BMid = calcularB(pMid, estado.segmentos, estado.I);
-    if (BMid.length() < 1e-16) break;
+    const magBMid = BMid.length();
+    if (magBMid < 1e-16 || !isFinite(magBMid)) break;
+
     const dir2 = BMid.clone().normalize().multiplyScalar(signo);
+    if (!isFinite(dir2.x) || !isFinite(dir2.y) || !isFinite(dir2.z)) break;
+
     p.addScaledVector(dir2, h);
+    if (!isFinite(p.x) || !isFinite(p.y) || !isFinite(p.z)) break;
 
     if (p.length() > 40) break;
 
@@ -1043,9 +1105,11 @@ function crearGeometriaLinea(puntos) {
 
     const B = calcularB(p, estado.segmentos, estado.I);
     const mag = B.length();
-    const factorMag = Math.min(1, Math.pow(mag * estado.amplificacion * 1e5, 0.15));
+    let factorMag = Math.min(1, Math.pow(mag * estado.amplificacion * 1e5, 0.15));
+    if (!isFinite(factorMag) || isNaN(factorMag)) factorMag = 0;
 
-    const alpha = factorRadial * (0.5 + 0.5 * factorMag);
+    let alpha = factorRadial * (0.5 + 0.5 * factorMag);
+    if (!isFinite(alpha) || isNaN(alpha)) alpha = 0;
 
     const t = Math.min(1, distRadial / RADIO_VISUAL_CM);
     colores[i*3]     = 0.15 + 0.55 * t;
@@ -1080,7 +1144,6 @@ function crearMaterialLinea() {
   });
 }
 
-// Material único compartido por todas las líneas de campo
 const materialLineaCompartido = crearMaterialLinea();
 
 function crearLineas() {
@@ -1093,14 +1156,19 @@ function crearLineas() {
 
   const semillas = [];
   if (estado.elemento === 'axial') {
-    const N = 12;
-    // 10 valores de z uniformemente distribuidos entre -5 y 5 cm
-    const N_LINEAS_Z = 10;
-    const Z_MIN = -5, Z_MAX = 5;
+    const N = 6; // Reducido para rendimiento
+    const N_LINEAS_Z = 5;
+    const Z_MIN = -VARILLA_LARGO_CM / 2 + 1;
+    const Z_MAX = VARILLA_LARGO_CM / 2 - 1;
     const valoresZ = [];
-    for (let k = 0; k < N_LINEAS_Z; k++) {
-      valoresZ.push(Z_MIN + (k / (N_LINEAS_Z - 1)) * (Z_MAX - Z_MIN));
+    if (Z_MIN < Z_MAX) {
+      for (let k = 0; k < N_LINEAS_Z; k++) {
+        valoresZ.push(Z_MIN + (k / (N_LINEAS_Z - 1)) * (Z_MAX - Z_MIN));
+      }
+    } else {
+      valoresZ.push(0);
     }
+    
     for (let i = 0; i < N; i++) {
       const ang = (i / N) * 2 * Math.PI;
       for (const z of valoresZ) {
@@ -1162,7 +1230,7 @@ function regenerarParticulas() {
   });
   if (lineas.length === 0) return;
 
-  const NPORLINEA = 4;
+  const NPORLINEA = 2; // Reducido para rendimiento
   const total = lineas.length * NPORLINEA;
 
   const posiciones = new Float32Array(total * 3);
@@ -1320,7 +1388,6 @@ function teslametroPosicionLogica() {
   return new THREE.Vector3(x_cm, y_cm, z_cm);
 }
 
-// Distancia real de la sonda (mm): usa la posición del teslámetro si está agarrado
 function sActual_mm() {
   if (!estado.teslametroAgarrado) return estado.s_mm;
   const p = teslametroPosicionLogica();
@@ -1350,7 +1417,6 @@ function actualizarCampo() {
   haloEspira.material.opacity = estado.elemento === 'tangencial' ? intensidadHalo * 0.35 : 0;
 
   actualizarLectura();
-  // La reconstrucción pesada se agrupa: una sola vez por frame (también en VR)
   campoSucio = true;
 }
 
@@ -1732,7 +1798,7 @@ const laboratorio = crearLaboratorio();
 scene.add(laboratorio);
 
 // ============================================================
-// PANEL VR — TABLERO FIJO (con textos MUY reducidos)
+// PANEL VR — TABLERO FIJO
 // ============================================================
 const panelVRGroup = new THREE.Group();
 panelVRGroup.position.set(0, 1.75, -1.9);
@@ -1788,8 +1854,6 @@ function crearPlanoTexto(ancho, alto, dibujar, posZ) {
   return mesh;
 }
 
-// Texto de etiqueta. Ahora `size` es el ancho en metros del plano.
-// Antes era 0.8 → ahora usamos 0.5 para las etiquetas y 0.3 para los valores.
 function crearTextoVR(texto, x, y, size, color, tamanoFuente) {
   const fuente = tamanoFuente || 90;
   const alto = size * 0.25;
@@ -1894,7 +1958,6 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
   grupo.position.set(x, y, PANEL_Z);
   grupo.userData.esSlider = true;
 
-  // Etiqueta — ancho 0.5 m (muy reducido)
   const etiquetaPlano = crearTextoVR(etiqueta, x, y + 0.09, 0.5, '#8fa3c0', 90);
 
   const pista = new THREE.Mesh(
@@ -1918,7 +1981,6 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
   perilla.userData.esPerilla = true;
   grupo.add(perilla);
 
-  // Valor — ancho 0.3 m (muy reducido)
   const valorPlano = crearTextoVR('0', x + w / 2 + 0.22, y, 0.3, '#4da3ff', 90);
 
   grupo.userData.min = min;
@@ -1950,10 +2012,6 @@ function crearSliderVR(x, y, w, valorInicial, min, max, step, color, onChange, e
   return grupo;
 }
 
-// ============================================================
-// DISTRIBUCIÓN DEL TABLERO (con textos muy pequeños)
-// ============================================================
-// Título — ancho 0.7 m (antes era 1.0)
 crearTextoVR('⚡ LEY DE BIOT-SAVART', 0, PANEL_ALTO / 2 - 0.11, 0.7, '#22d3ee', 120);
 
 const sliderI_VR = crearSliderVR(-0.30, 0.50, 1.7, estado.I, 0, 100, 0.5, 0x4da3ff, (v) => {
@@ -2050,7 +2108,6 @@ crearBotonVR('🔄 RESET', 0.10, -0.90, 0.50, 0.085, 0x0891b2, () => {
   mostrarToast('🔄 Reset');
 }, 100);
 
-// Display lectura VR — ancho 0.6 m (antes era 1.0)
 const displayLecturaVR = crearTextoVR('B = 0.0000 mT   [VARILLA]', 0, -1.04, 0.6, '#4da3ff', 100);
 
 function actualizarPanelVR() {
@@ -2277,6 +2334,11 @@ function aplicarElemento(nombre) {
   varillaGroup.visible = axial;
   espiraGroup.visible = !axial;
   estado.segmentos = axial ? segmentosVarilla() : segmentosEspira();
+  
+  // Mostrar/Ocultar sliders de geometría
+  document.getElementById('controlVarilla').style.display = axial ? 'block' : 'none';
+  document.getElementById('controlEspira').style.display = axial ? 'none' : 'block';
+
   document.getElementById('elemento').value = nombre;
   actualizarCampo();
   actualizarPanelVR();
@@ -2341,6 +2403,23 @@ document.getElementById('posicion').addEventListener('input', e => {
   actualizarLectura();
   sliderS_VR.userData.valor = estado.s_mm;
   sliderS_VR.userData.actualizarVisual();
+});
+
+// LISTENERS DE GEOMETRÍA
+document.getElementById('largoVarilla').addEventListener('input', e => {
+  VARILLA_LARGO_CM = parseFloat(e.target.value);
+  document.getElementById('valLargo').textContent = VARILLA_LARGO_CM.toFixed(1) + ' cm';
+  escalarModeloVarilla();
+  estado.segmentos = segmentosVarilla();
+  actualizarCampo();
+});
+
+document.getElementById('radioEspira').addEventListener('input', e => {
+  ESPIRA_RADIO_CM = parseFloat(e.target.value);
+  document.getElementById('valRadio').textContent = ESPIRA_RADIO_CM.toFixed(1) + ' cm';
+  escalarModeloEspira();
+  estado.segmentos = segmentosEspira();
+  actualizarCampo();
 });
 
 document.getElementById('chkZona').addEventListener('change', e => { estado.mostrarZona = e.target.checked; zonaGroup.visible = estado.mostrarZona; });
@@ -2507,19 +2586,17 @@ function moda(arr) {
   return mejor;
 }
 
-// Valor analítico (mT) que corresponde a la geometría simulada
 function BteoricoMT(elemento, I, s_mm) {
   const s = s_mm / 1000;
   if (s <= 0) return 0;
   if (elemento === 'axial') {
-    const h = VARILLA_LARGO_CM / 200; // semilongitud en m
+    const h = VARILLA_LARGO_CM / 200;
     return (MU0 * I / (4 * Math.PI * s)) * (2 * h / Math.sqrt(h * h + s * s)) * 1000;
   }
   const R = ESPIRA_RADIO_CM / 100;
   return (MU0 * I * R * R / (2 * Math.pow(R * R + s * s, 1.5))) * 1000;
 }
 
-// Pendiente n del ajuste log-log  y ∝ x^n  (null si no hay datos suficientes)
 function ajustePotencia(pts) {
   const v = pts.filter(p => p.x > 0 && p.y > 0);
   if (v.length < 3 || new Set(v.map(p => p.x)).size < 3) return null;
@@ -2540,7 +2617,7 @@ function dataURLtoUint8(dataURL) {
 
 document.getElementById('btnReporte').addEventListener('click', async () => {
   if (datosCapturados.length === 0) { mostrarToast('⚠️ No hay datos capturados'); return; }
-  if (!window.docx) { mostrarToast('⚠️ No se cargó la librería docx (revisa tu conexión)'); return; }
+  if (!window.docx) { mostrarToast('⚠️ No se cargó la librería docx'); return; }
 
   const elem = estado.elemento;
   const datosElem = datosCapturados.filter(d => d.elemento === elem);
@@ -2557,7 +2634,6 @@ document.getElementById('btnReporte').addEventListener('click', async () => {
       ? `Varilla recta finita de ${VARILLA_LARGO_CM} cm (sonda perpendicular)`
       : `Espira circular de radio ${ESPIRA_RADIO_CM} cm (sonda en el eje)`;
 
-    // s fija e I fija = los valores más repetidos (robusto frente a barridos)
     const sFijo = moda(datosElem.map(d => Math.round(d.s_mm)));
     const IFijo = moda(datosElem.map(d => d.I.toFixed(1)));
     const datosBvsI = datosElem.filter(d => Math.round(d.s_mm) === sFijo).map(d => ({ x: d.I, y: d.B }));
@@ -2566,7 +2642,6 @@ document.getElementById('btnReporte').addEventListener('click', async () => {
     const imgBvsI = datosBvsI.length > 2 ? generarGrafica(datosBvsI, 'I (A)', `B vs I  (s = ${sFijo} mm)`, '#2563eb') : null;
     const imgBvsS = datosBvsS.length > 2 ? generarGrafica(datosBvsS, 's (mm)', `B vs s  (I = ${IFijo} A)`, '#9333ea') : null;
 
-    // Comparación con la fórmula analítica
     const filasDatos = datosElem.map((d, i) => {
       const t = BteoricoMT(d.elemento, d.I, d.s_mm);
       const err = t > 0 ? Math.abs(d.B - t) / t * 100 : null;
@@ -2591,7 +2666,6 @@ document.getElementById('btnReporte').addEventListener('click', async () => {
       }))
     ];
 
-    // Conclusiones calculadas a partir de los datos
     const nI = ajustePotencia(datosBvsI);
     const nS = ajustePotencia(datosBvsS);
     const interpS = esVarilla
@@ -2600,12 +2674,12 @@ document.getElementById('btnReporte').addEventListener('click', async () => {
     const conclusiones = [
       nI !== null
         ? `Con s fija (${sFijo} mm), el ajuste log-log da B ∝ I^${nI.toFixed(3)}. Un exponente cercano a 1 confirma la proporcionalidad lineal entre B e I.`
-        : 'No hay datos suficientes para verificar B vs I (se requieren al menos 3 valores distintos de I > 0 con s fija).',
+        : 'No hay datos suficientes para verificar B vs I.',
       nS !== null
         ? `Con I fija (${IFijo} A), el ajuste log-log da B ∝ s^${nS.toFixed(3)}. ${interpS}`
-        : 'No hay datos suficientes para verificar B vs s (se requieren al menos 3 distancias distintas con I fija).',
+        : 'No hay datos suficientes para verificar B vs s.',
       errMedio !== null
-        ? `El error relativo medio entre la integración numérica (100 segmentos) y la fórmula analítica es ${errMedio.toFixed(3)} %.`
+        ? `El error relativo medio entre la integración numérica y la fórmula analítica es ${errMedio.toFixed(3)} %.`
         : 'No fue posible calcular el error respecto a la fórmula analítica.'
     ];
 
@@ -2632,9 +2706,9 @@ document.getElementById('btnReporte').addEventListener('click', async () => {
       new Paragraph('La ley de Biot-Savart describe el campo magnético producido por una corriente estacionaria:'),
       new Paragraph({ children: [new TextRun({ text: 'dB = (μ₀ I / 4π) · (dl × r̂) / r²', italics: true })], alignment: AlignmentType.CENTER, spacing: { before: 150, after: 150 } }),
       new Paragraph(esVarilla
-        ? `Para una varilla recta finita de longitud 2h = ${VARILLA_LARGO_CM} cm y un punto en su plano medio a distancia s: B = (μ₀ I / 4π s) · 2h / √(h² + s²). Cuando h ≫ s se reduce al caso de varilla infinita, B = μ₀ I / (2π s). Una varilla aislada no cumple la conservación de la corriente (∇·J = 0), por lo que es una idealización didáctica.`
+        ? `Para una varilla recta finita de longitud 2h = ${VARILLA_LARGO_CM} cm y un punto en su plano medio a distancia s: B = (μ₀ I / 4π s) · 2h / √(h² + s²). Cuando h ≫ s se reduce a la varilla infinita.`
         : `Para una espira circular de radio R = ${ESPIRA_RADIO_CM} cm, sobre su eje y a distancia s de su centro: B = μ₀ I R² / [2 (R² + s²)^(3/2)].`),
-      new Paragraph('El simulador calcula B sumando numéricamente la contribución de 100 segmentos del conductor. Los datos de este reporte provienen de esa simulación, no de mediciones físicas.'),
+      new Paragraph('El simulador calcula B sumando numéricamente la contribución de 100 segmentos del conductor. Los datos de este reporte provienen de esa simulación.'),
 
       h1('2. Datos de la simulación (solo el elemento actual)'),
       new Table({ rows: filas, width: { size: 100, type: WidthType.PERCENTAGE } })
@@ -2646,7 +2720,7 @@ document.getElementById('btnReporte').addEventListener('click', async () => {
     children.push(
       h1('5. Análisis y conclusiones'),
       ...conclusiones.map(t => new Paragraph('• ' + t)),
-      new Paragraph({ children: [new TextRun({ text: 'Fuentes de discrepancia: discretización del conductor en 100 segmentos y, si el teslámetro se movió a mano en VR, desalineación respecto al eje de medición.', italics: true, size: 20 })], spacing: { before: 150 } })
+      new Paragraph({ children: [new TextRun({ text: 'Fuentes de discrepancia: discretización del conductor y desalineación si el teslámetro se movió a mano.', italics: true, size: 20 })], spacing: { before: 150 } })
     );
 
     const doc = new Document({ sections: [{ properties: {}, children }] });
@@ -2709,6 +2783,8 @@ addEventListener('resize', () => {
 // ============================================================
 // INIT
 // ============================================================
+escalarModeloVarilla();
+escalarModeloEspira();
 actualizarPosicionSonda();
 actualizarCampo();
 actualizarPanelVR();
